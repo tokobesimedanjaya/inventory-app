@@ -90,17 +90,22 @@ def update_stok_db(id_barang, id_gudang, jumlah, jenis, nama_sales=None):
     return True, stok_baru
 
 # ==========================================
-# 2. GENERATOR INVOICE PDF (Mendukung Diskon & Cash)
+# 2. GENERATOR INVOICE PDF 
 # ==========================================
 def buat_pdf_bytes(no_invoice, nama_pelanggan, item_nama, item_ukuran, qty, harga, jenis_transaksi, gudang_nama, subtotal, nominal_diskon, total_akhir, cash_input, kembalian):
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     story = []
     
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle('Title', parent=styles['Heading1'], alignment=1, spaceAfter=4)
     sub_style = ParagraphStyle('Sub', alignment=1, spaceAfter=2, fontSize=9, leading=12)
     note_style = ParagraphStyle('Note', alignment=1, spaceAfter=15, fontSize=8, textColor=colors.gray)
+    
+    # Style teks khusus untuk sel tabel agar kode bold b tidak bocor
+    cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=9)
+    cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=9, alignment=2)
+    cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=9, alignment=2, fontName='Helvetica-Bold')
     
     story.append(Paragraph("<b>TOKO BESI MEDAN JAYA</b>", title_style))
     story.append(Paragraph("Menyediakan Besi Holo, Beton, Siku, H-Beam, WF, IWF, dan Alat Teknik", sub_style))
@@ -112,33 +117,30 @@ def buat_pdf_bytes(no_invoice, nama_pelanggan, item_nama, item_ukuran, qty, harg
     story.append(Paragraph(f"<b>Pelanggan / Penerima:</b> {nama_pelanggan}", styles['Normal']))
     story.append(Spacer(1, 15))
     
+    # Menggunakan objek Paragraph agar teks terformat tebal/rapi di ReportLab
     data = [
-        ["Nama Barang", "Ukuran", "Lokasi", "Qty", "Satuan", "Harga", "Subtotal"],
+        [Paragraph("<b>Nama Barang</b>", cell_style), Paragraph("<b>Ukuran</b>", cell_style), Paragraph("<b>Lokasi</b>", cell_style), Paragraph("<b>Qty</b>", cell_style), Paragraph("<b>Satuan</b>", cell_style), Paragraph("<b>Harga</b>", cell_right), Paragraph("<b>Subtotal</b>", cell_right)],
         [item_nama, item_ukuran, gudang_nama, str(qty), "Batang", f"Rp {harga:,}", f"Rp {subtotal:,}"],
-        ["", "", "", "", "", "Subtotal:", f"Rp {subtotal:,}"],
-        ["", "", "", "", "", "Diskon:", f"- Rp {nominal_diskon:,}"],
-        ["", "", "", "", "", "TOTAL AKHIR:", f"Rp {total_akhir:,}"]
+        ["", "", "", "", "", Paragraph("<b>Subtotal:</b>", cell_bold_right), Paragraph(f"Rp {subtotal:,}", cell_right)],
+        ["", "", "", "", "", Paragraph("<b>Diskon:</b>", cell_bold_right), Paragraph(f"- Rp {nominal_diskon:,}", cell_right)],
+        ["", "", "", "", "", Paragraph("<b>TOTAL AKHIR:</b>", cell_bold_right), Paragraph(f"Rp {total_akhir:,}", cell_bold_right)]
     ]
     
     if cash_input > 0:
-        data.append(["", "", "", "", "", "Tunai (Cash):", f"Rp {cash_input:,}"])
-        data.append(["", "", "", "", "", "Kembalian:", f"Rp {kembalian:,}"])
+        data.append(["", "", "", "", "", Paragraph("<b>Tunai (Cash):</b>", cell_bold_right), Paragraph(f"Rp {cash_input:,}", cell_right)])
+        data.append(["", "", "", "", "", Paragraph("<b>Kembalian:</b>", cell_bold_right), Paragraph(f"Rp {kembalian:,}", cell_bold_right)])
     
     table = Table(data, colWidths=[140, 80, 60, 40, 50, 95, 95])
     
     t_style = [
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1A365D")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('ALIGN', (0,0), (-1,1), 'LEFT'),
+        ('ALIGN', (5,1), (6,-1), 'RIGHT'),
         ('BOTTOMPADDING', (0,0), (-1,0), 6),
         ('GRID', (0,0), (-1,1), 0.5, colors.grey),
         ('LINEABOVE', (5,2), (6,2), 1, colors.black),
-        ('FONTNAME', (5,4), (6,4), 'Helvetica-Bold'),
     ]
-    
-    if cash_input > 0:
-        t_style.append(('FONTNAME', (5,6), (6,6), 'Helvetica-Bold'))
-        
     table.setStyle(TableStyle(t_style))
     
     story.append(table)
@@ -160,7 +162,7 @@ col1, col2 = st.columns([1.1, 0.9])
 
 with col2:
     st.header("📦 Sisa Stok Gudang Real-Time")
-    cari_produk = st.text_input("🔍 Cari Nama Besi / Ukuran / Supplier:", "", placeholder="Ketik besi, ukuran, gudang, atau nama sales...")
+    cari_produk = st.text_input("🔍 Cari Nama Besi / Ukuran / Supplier:", "", placeholder="Ketik besi, ukuran, gudang, atau nama sales...", key="input_cari_stok")
     
     data_stok = ambil_data_stok()
     tabel_tampil = []
@@ -203,40 +205,40 @@ with col1:
     
     if not barang_list:
         st.warning("⚠️ Sistem mendeteksi data master barang Anda masih kosong bersih.")
-        st.info("👇 Silakan gulir ke bagian paling bawah halaman pada bagian **'Tambah Varian Barang Baru'** untuk mendaftarkan nama dan ukuran besi terlebih dahulu sebelum melakukan transaksi.")
     else:
-        jenis_transaksi = st.radio("Aktivitas Barang", ["Keluar (Penjualan/Sales)", "Masuk (Restock/Supplier)"])
+        # Menambahkan parameter 'key' unik pada setiap widget untuk mencegah bug "Failed to fetch dynamically imported module"
+        jenis_transaksi = st.radio("Aktivitas Barang", ["Keluar (Penjualan/Sales)", "Masuk (Restock/Supplier)"], key="radio_jenis_transaksi")
         jenis_db = "Keluar" if "Keluar" in jenis_transaksi else "Masuk"
         
         if jenis_db == "Keluar":
-            no_inv = st.text_input("Nomor Nota / Invoice", "INV-MJ-001")
-            pelanggan = st.text_input("Nama Pelanggan / Sales Lapangan", "Toko Bangunan Sumber Rezeki")
+            no_inv = st.text_input("Nomor Nota / Invoice", "INV-MJ-001", key="input_no_invoice")
+            pelanggan = st.text_input("Nama Pelanggan / Sales Lapangan", "Toko Bangunan Sumber Rezeki", key="input_nama_pelanggan")
             
-            barang_pilihan = st.selectbox("Pilih Barang", barang_list, format_func=lambda x: f"{x[1]} ({x[2]})")
-            gudang_pilihan = st.selectbox("Ambil dari Gudang Berapa", gudang_list, format_func=lambda x: x[1])
+            barang_pilihan = st.selectbox("Pilih Barang", barang_list, format_func=lambda x: f"{x[1]} ({x[2]})", key="select_barang_keluar")
+            gudang_pilihan = st.selectbox("Ambil dari Gudang Berapa", gudang_list, format_func=lambda x: x[1], key="select_gudang_keluar")
             
-            qty = st.number_input("Banyaknya Barang (Batang)", min_value=1, value=5, step=1)
-            harga = st.number_input("Harga Jual per Batang (Rp)", min_value=0, value=35000, step=500)
+            qty = st.number_input("Banyaknya Barang (Batang)", min_value=1, value=5, step=1, key="number_qty_keluar")
+            harga = st.number_input("Harga Jual per Batang (Rp)", min_value=0, value=35000, step=500, key="number_harga_keluar")
             
-            # --- MENU INPUT BARU: DISKON & CASH ---
+            st.markdown("---")
             st.markdown("##### 💰 Potongan Harga & Pembayaran (Kasir)")
-            tipe_diskon = st.selectbox("Jenis Diskon", ["Tanpa Diskon", "Persentase (%)", "Nominal (Rupiah)"])
+            
+            tipe_diskon = st.selectbox("Jenis Diskon", ["Tanpa Diskon", "Persentase (%)", "Nominal (Rupiah)"], key="select_tipe_diskon")
             
             nominal_diskon = 0
             subtotal_kalkulasi = qty * harga
             
             if tipe_diskon == "Persentase (%)":
-                persen_diskon = st.number_input("Masukkan Persen (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.5)
+                persen_diskon = st.number_input("Masukkan Persen (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.5, key="number_persen_diskon")
                 nominal_diskon = int(subtotal_kalkulasi * (persen_diskon / 100))
             elif tipe_diskon == "Nominal (Rupiah)":
-                nominal_diskon = st.number_input("Masukkan Potongan Rupiah (Rp)", min_value=0, max_value=subtotal_kalkulasi, value=0, step=1000)
+                nominal_diskon = st.number_input("Masukkan Potongan Rupiah (Rp)", min_value=0, max_value=subtotal_kalkulasi, value=0, step=1000, key="number_nominal_diskon")
                 
             total_akhir = subtotal_kalkulasi - nominal_diskon
             
-            # Menampilkan teks ringkasan hitungan kasir secara real-time
             st.markdown(f"**Subtotal:** Rp {subtotal_kalkulasi:,} | **Diskon:** Rp {nominal_diskon:,} | **Total Tagihan:** :green[**Rp {total_akhir:,}**]")
             
-            cash_input = st.number_input("Uang Tunai / Cash dari Pembeli (Optional - Rp)", min_value=0, value=0, step=5000)
+            cash_input = st.number_input("Uang Tunai / Cash dari Pembeli (Optional - Rp)", min_value=0, value=0, step=5000, key="number_cash_input")
             
             kembalian = 0
             if cash_input > 0:
@@ -247,7 +249,7 @@ with col1:
                     st.info(f"💵 **Uang Kembalian:** :blue[**Rp {kembalian:,}**]")
             
             st.markdown("---")
-            proses_tombol = st.button("Proses Pengeluaran Barang & Cetak Nota")
+            proses_tombol = st.button("Proses Pengeluaran Barang & Cetak Nota", key="btn_proses_keluar")
             
             if proses_tombol:
                 if cash_input > 0 and cash_input < total_akhir:
@@ -260,27 +262,27 @@ with col1:
                             no_inv, pelanggan, barang_pilihan[1], barang_pilihan[2], qty, harga, jenis_db, gudang_pilihan[1],
                             subtotal_kalkulasi, nominal_diskon, total_akhir, cash_input, kembalian
                         )
-                        st.download_button(label="📥 Unduh PDF Invoice Nota Terbaru", data=pdf_data, file_name=f"Invoice_{no_inv}.pdf", mime="application/pdf")
+                        st.download_button(label="📥 Unduh PDF Invoice Nota Terbaru", data=pdf_data, file_name=f"Invoice_{no_inv}.pdf", mime="application/pdf", key="btn_download_pdf")
                     else:
                         st.error(f"❌ Stok tidak cukup! Sisa di {gudang_pilihan[1]} hanya {info} batang.")
                     
         else:
-            nama_sales_masuk = st.text_input("Nama Penyuplai / Sales Supplier", placeholder="Masukkan nama sales atau nama pabrik...")
+            nama_sales_masuk = st.text_input("Nama Penyuplai / Sales Supplier", placeholder="Masukkan nama sales atau nama pabrik...", key="input_sales_masuk")
             
-            barang_pilihan = st.selectbox("Pilih Barang yang Masuk", barang_list, format_func=lambda x: f"{x[1]} ({x[2]})")
-            gudang_pilihan = st.selectbox("Simpan di Gudang Berapa", gudang_list, format_func=lambda x: x[1])
+            barang_pilihan = st.selectbox("Pilih Barang yang Masuk", barang_list, format_func=lambda x: f"{x[1]} ({x[2]})", key="select_barang_masuk")
+            gudang_pilihan = st.selectbox("Simpan di Gudang Berapa", gudang_list, format_func=lambda x: x[1], key="select_gudang_masuk")
             
-            qty = st.number_input("Banyaknya Barang (Batang)", min_value=1, value=50, step=1)
+            qty = st.number_input("Banyaknya Barang (Batang)", min_value=1, value=50, step=1, key="number_qty_masuk")
             
-            proses_tombol = st.button("Simpan Stok Masuk")
+            proses_tombol = st.button("Simpan Stok Masuk", key="btn_simpan_masuk")
             
             if proses_tombol:
                 if not nama_sales_masuk.strip():
-                    st.warning("⚠️ Mohon isi Nama Penyuplai terlebih dahulu agar riwayat pencatatan tersimpan!")
+                    st.warning("⚠️ Mohon isi Nama Penyuplai terlebih dahulu!")
                 else:
                     sukses, info = update_stok_db(barang_pilihan[0], gudang_pilihan[0], qty, jenis_db, nama_sales=nama_sales_masuk)
                     if sukses:
-                        st.success(f"✅ Berhasil! Stok {barang_pilihan[1]} di {gudang_pilihan[1]} bertambah menjadi {info} Batang. Tercatat Penyuplai: {nama_sales_masuk}")
+                        st.success(f"✅ Berhasil! Stok {barang_pilihan[1]} di {gudang_pilihan[1]} bertambah menjadi {info} Batang.")
                         st.rerun()
 
 # ==========================================
@@ -292,13 +294,10 @@ expand_barang, expand_gudang = st.columns(2)
 
 with expand_barang:
     st.write("**➕ Tambah Varian Barang Baru**")
-    if not gudang_list:
-        st.error("Gudang tidak terdeteksi")
-    else:
+    if gudang_list:
         with st.form("form_barang", clear_on_submit=True):
             nama_baru = st.text_input("Nama Barang Baru", placeholder="Misal: Besi Beton Polos 10mm")
             ukuran_baru = st.text_input("Ukuran / Spesifikasi Panjang", placeholder="Misal: 10mm x 12m")
-            gudang_pilihan_baru = st.selectbox("Lokasi Gudang Awal", gudang_list, format_func=lambda x: x[1])
             submit_b = st.form_submit_button("Daftarkan Barang Baru")
             
             if submit_b and nama_baru and ukuran_baru:
@@ -306,14 +305,12 @@ with expand_barang:
                 cursor = conn.cursor()
                 cursor.execute("INSERT INTO barang (nama, ukuran, satuan) VALUES (?, ?, 'Batang')", (nama_baru, ukuran_baru))
                 id_b = cursor.lastrowid
-                
                 all_gudang = cursor.execute("SELECT id FROM gudang").fetchall()
                 for g in all_gudang:
                     cursor.execute("INSERT INTO stok (id_barang, id_gudang, jumlah_batang, sales_terakhir) VALUES (?, ?, 0, '-')", (id_b, g[0]))
-                
                 conn.commit()
                 conn.close()
-                st.success(f"🎉 Produk '{nama_baru}' ({ukuran_baru}) berhasil didaftarkan di sistem!")
+                st.success(f"🎉 Produk '{nama_baru}' berhasil didaftarkan!")
                 st.rerun()
 
 with expand_gudang:
@@ -331,7 +328,6 @@ with expand_gudang:
             else:
                 cursor.execute("INSERT INTO gudang (nama) VALUES (?)", (nama_g_baru,))
                 id_g = cursor.lastrowid
-                
                 all_b = cursor.execute("SELECT id FROM barang").fetchall()
                 for b in all_b:
                     cursor.execute("INSERT INTO stok (id_barang, id_gudang, jumlah_batang, sales_terakhir) VALUES (?, ?, 0, '-')", (b[0], id_g))
@@ -345,21 +341,7 @@ with expand_gudang:
 # ==========================================
 st.markdown("---")
 st.subheader("💾 Sistem Keselamatan Data (Backup)")
-col_back1, col_back2 = st.columns([1.5, 1.0])
-
-with col_back1:
-    st.info("💡 **Tips Keamanan:** Lakukan backup database ini setiap sore hari setelah toko tutup. File hasil download ini bisa disimpan di laptop/HP Anda sebagai cadangan jika sewaktu-waktu server cloud mengalami penyegaran otomatis.")
-
-with col_back2:
-    if os.path.exists('inventory_medan_jaya.db'):
-        with open('inventory_medan_jaya.db', 'rb') as f:
-            db_bytes = f.read()
-        
-        st.download_button(
-            label="📥 Download Database Backup (.db)",
-            data=db_bytes,
-            file_name="inventory_medan_jaya_backup.db",
-            mime="application/octet-stream"
-        )
-    else:
-        st.error("Berkas database belum terbentuk.")
+if os.path.exists('inventory_medan_jaya.db'):
+    with open('inventory_medan_jaya.db', 'rb') as f:
+        db_bytes = f.read()
+    st.download_button(label="📥 Download Database Backup (.db)", data=db_bytes, file_name="inventory_medan_jaya_backup.db", mime="application/octet-stream", key="btn_backup_db")
