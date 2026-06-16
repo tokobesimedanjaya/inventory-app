@@ -111,6 +111,7 @@ def buat_pdf_bytes(no_invoice, nama_pelanggan, daftar_item, subtotal, nominal_di
     note_style = ParagraphStyle('Note', alignment=1, spaceAfter=15, fontSize=8, textColor=colors.gray)
     
     cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=9)
+    cell_center = ParagraphStyle('CellCenter', parent=styles['Normal'], fontSize=9, alignment=1)
     cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=9, alignment=2)
     cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=9, alignment=2, fontName='Helvetica-Bold')
     
@@ -124,8 +125,9 @@ def buat_pdf_bytes(no_invoice, nama_pelanggan, daftar_item, subtotal, nominal_di
     story.append(Paragraph(f"<b>Pelanggan / Penerima:</b> {nama_pelanggan}", styles['Normal']))
     story.append(Spacer(1, 15))
     
-    # Header Tabel
+    # Header Tabel dengan Kolom No. Urut
     data = [[
+        Paragraph("<b>No.</b>", cell_center),
         Paragraph("<b>Nama Barang</b>", cell_style), 
         Paragraph("<b>Ukuran</b>", cell_style), 
         Paragraph("<b>Lokasi</b>", cell_style), 
@@ -135,9 +137,10 @@ def buat_pdf_bytes(no_invoice, nama_pelanggan, daftar_item, subtotal, nominal_di
         Paragraph("<b>Subtotal</b>", cell_right)
     ]]
     
-    # Looping memasukkan semua item di keranjang ke dalam baris tabel PDF
-    for item in daftar_item:
+    # Looping memasukkan item dengan nomor urut otomatis (1, 2, 3...)
+    for idx, item in enumerate(daftar_item, start=1):
         data.append([
+            Paragraph(str(idx), cell_center),
             item['nama'],
             item['ukuran'],
             item['gudang_nama'],
@@ -147,25 +150,27 @@ def buat_pdf_bytes(no_invoice, nama_pelanggan, daftar_item, subtotal, nominal_di
             f"Rp {item['item_subtotal']:,}"
         ])
         
-    # Kaki tabel kuitansi
-    data.append(["", "", "", "", "", Paragraph("<b>Subtotal:</b>", cell_bold_right), Paragraph(f"Rp {subtotal:,}", cell_right)])
-    data.append(["", "", "", "", "", Paragraph("<b>Diskon:</b>", cell_bold_right), Paragraph(f"- Rp {nominal_diskon:,}", cell_right)])
-    data.append(["", "", "", "", "", Paragraph("<b>TOTAL AKHIR:</b>", cell_bold_right), Paragraph(f"Rp {total_akhir:,}", cell_bold_right)])
+    # Kaki tabel kuitansi disesuaikan posisinya
+    data.append(["", "", "", "", "", "", Paragraph("<b>Subtotal:</b>", cell_bold_right), Paragraph(f"Rp {subtotal:,}", cell_right)])
+    data.append(["", "", "", "", "", "", Paragraph("<b>Diskon:</b>", cell_bold_right), Paragraph(f"- Rp {nominal_diskon:,}", cell_right)])
+    data.append(["", "", "", "", "", "", Paragraph("<b>TOTAL AKHIR:</b>", cell_bold_right), Paragraph(f"Rp {total_akhir:,}", cell_bold_right)])
     
     if cash_input > 0:
-        data.append(["", "", "", "", "", Paragraph("<b>Tunai (Cash):</b>", cell_bold_right), Paragraph(f"Rp {cash_input:,}", cell_right)])
-        data.append(["", "", "", "", "", Paragraph("<b>Kembalian:</b>", cell_bold_right), Paragraph(f"Rp {kembalian:,}", cell_bold_right)])
+        data.append(["", "", "", "", "", "", Paragraph("<b>Tunai (Cash):</b>", cell_bold_right), Paragraph(f"Rp {cash_input:,}", cell_right)])
+        data.append(["", "", "", "", "", "", Paragraph("<b>Kembalian:</b>", cell_bold_right), Paragraph(f"Rp {kembalian:,}", cell_bold_right)])
     
-    table = Table(data, colWidths=[140, 80, 60, 40, 50, 95, 95])
+    # Penyesuaian ukuran kolom agar proporsional dan tidak terpotong
+    table = Table(data, colWidths=[30, 130, 75, 55, 35, 45, 95, 95])
     
     t_style = [
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1A365D")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-        ('ALIGN', (0,0), (-1,1), 'LEFT'),
-        ('ALIGN', (5,1), (6,-1), 'RIGHT'),
+        ('ALIGN', (0,0), (0,-1), 'CENTER'),
+        ('ALIGN', (1,0), (-1,1), 'LEFT'),
+        ('ALIGN', (6,1), (7,-1), 'RIGHT'),
         ('BOTTOMPADDING', (0,0), (-1,0), 6),
         ('GRID', (0,0), (-1, len(daftar_item)), 0.5, colors.grey),
-        ('LINEABOVE', (5, len(daftar_item)+1), (6, len(daftar_item)+1), 1, colors.black),
+        ('LINEABOVE', (6, len(daftar_item)+1), (7, len(daftar_item)+1), 1, colors.black),
     ]
     table.setStyle(TableStyle(t_style))
     
@@ -241,9 +246,9 @@ with col1:
         jenis_transaksi = st.radio("Aktivitas Barang", opsi_aktivitas, key="radio_jenis_transaksi")
         jika_barang_keluar = (jenis_transaksi == opsi_aktivitas[0])
         
-        # =========================================================
-        # INTERFACE: BARANG KELUAR (PENJUALAN DENGAN MULTI-ITEM)
-        # =========================================================
+        # ------------------------------------------
+        # INTERFACE: BARANG KELUAR (PENJUALAN)
+        # ------------------------------------------
         if jika_barang_keluar:
             st.markdown("#### 🏢 Data Nota & Input Item")
             no_inv = st.text_input("Nomor Nota / Invoice", "INV-MJ-001", key="input_no_invoice")
@@ -257,15 +262,12 @@ with col1:
                 gudang_pilihan = st.selectbox("Ambil dari Gudang Berapa", gudang_list, format_func=lambda x: x[1], key="select_gudang_keluar")
                 harga = st.number_input("Harga Jual per Batang (Rp)", min_value=0, value=35000, step=500, key="number_harga_keluar")
             
-            # Tombol Tambah ke Keranjang Keluar
             if st.button("➕ Tambahkan Ke Keranjang Nota", key="btn_add_cart_keluar"):
                 stok_tersedia = cek_stok_tersedia(barang_pilihan[0], gudang_pilihan[0])
-                
-                # Hitung akumulasi qty yang sudah dimasukkan ke keranjang sebelumnya untuk barang yang sama
                 qty_di_keranjang = sum(item['qty'] for item in st.session_state.cart_keluar if item['id_barang'] == barang_pilihan[0] and item['id_gudang'] == gudang_pilihan[0])
                 
                 if stok_tersedia < (qty + qty_di_keranjang):
-                    st.error(f"❌ Stok tidak cukup! Sisa di {gudang_pilihan[1]} hanya {stok_tersedia} batang. Di keranjang sudah ada {qty_di_keranjang} batang.")
+                    st.error(f"❌ Stok tidak cukup! Sisa di {gudang_pilihan[1]} hanya {stok_tersedia} batang.")
                 else:
                     st.session_state.cart_keluar.append({
                         'id_barang': barang_pilihan[0],
@@ -279,13 +281,12 @@ with col1:
                     })
                     st.toast("Barang berhasil dimasukkan ke daftar kuitansi!")
             
-            # TAMPILAN TABEL REKAP KERANJANG BELANJA KELUAR
             if st.session_state.cart_keluar:
                 st.markdown("---")
                 st.markdown("### 🛒 Daftar Keranjang Belanja Saat Ini")
                 
-                for idx, item in enumerate(st.session_state.cart_keluar):
-                    st.markdown(f"**{idx+1}. {item['nama']} ({item['ukuran']})** | {item['qty']} Batang dari {item['gudang_nama']} | @ Rp {item['harga']:,} = **Rp {item['item_subtotal']:,}**")
+                for idx, item in enumerate(st.session_state.cart_keluar, start=1):
+                    st.markdown(f"**{idx}. {item['nama']} ({item['ukuran']})** | {item['qty']} Batang dari {item['gudang_nama']} | @ Rp {item['harga']:,} = **Rp {item['item_subtotal']:,}**")
                 
                 if st.button("🗑️ Kosongkan Keranjang", key="clear_cart_kel"):
                     st.session_state.cart_keluar = []
@@ -324,7 +325,6 @@ with col1:
                     if cash_input > 0 and cash_input < total_akhir:
                         st.error("❌ Transaksi gagal! Jumlah uang cash kurang dari total tagihan.")
                     else:
-                        # Eksekusi potong stok di database untuk semua item sekaligus
                         sukses_semua = True
                         for item in st.session_state.cart_keluar:
                             sukses, info = update_stok_db(item['id_barang'], item['id_gudang'], item['qty'], "Keluar")
@@ -339,14 +339,13 @@ with col1:
                                 subtotal_kalkulasi, nominal_diskon, total_akhir, cash_input, kembalian
                             )
                             st.download_button(label="📥 Unduh PDF Invoice Nota Gabungan", data=pdf_data, file_name=f"Invoice_Gabungan_{no_inv}.pdf", mime="application/pdf", key="btn_download_pdf")
-                            # Kosongkan keranjang setelah sukses transaksi
                             st.session_state.cart_keluar = []
             else:
                 st.info("🛒 Keranjang nota Anda masih kosong. Silakan pilih barang di atas lalu klik 'Tambahkan Ke Keranjang Nota'.")
 
-        # =========================================================
-        # INTERFACE: BARANG MASUK (RESTOCK DARI SALES BANYAK BARANG)
-        # =========================================================
+        # ------------------------------------------
+        # INTERFACE: BARANG MASUK (RESTOCK)
+        # ------------------------------------------
         else:
             st.markdown("#### 🏢 Data Pengiriman Supplier")
             nama_sales_masuk = st.text_input("Nama Penyuplai / Sales Supplier", placeholder="Masukkan nama sales atau nama pabrik...", key="input_sales_masuk")
@@ -373,13 +372,12 @@ with col1:
                     })
                     st.toast("Item berhasil dicatat ke daftar tunggu restock!")
 
-            # TAMPILAN REKAP DAFTAR BARANG MASUK
             if st.session_state.cart_masuk:
                 st.markdown("---")
                 st.markdown("### 📥 Daftar Tunggu Restock Masuk")
                 
-                for idx, item in enumerate(st.session_state.cart_masuk):
-                    st.markdown(f"**{idx+1}. {item['nama']}** -> +{item['qty']} Batang ke {item['gudang_nama']} (Sales: {item['sales']})")
+                for idx, item in enumerate(st.session_state.cart_masuk, start=1):
+                    st.markdown(f"**{idx}. {item['nama']}** -> +{item['qty']} Batang ke {item['gudang_nama']} (Sales: {item['sales']})")
                 
                 if st.button("🗑️ Bersihkan Daftar Tunggu", key="clear_cart_mas"):
                     st.session_state.cart_masuk = []
