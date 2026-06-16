@@ -90,9 +90,9 @@ def update_stok_db(id_barang, id_gudang, jumlah, jenis, nama_sales=None):
     return True, stok_baru
 
 # ==========================================
-# 2. GENERATOR INVOICE PDF
+# 2. GENERATOR INVOICE PDF (Mendukung Diskon & Cash)
 # ==========================================
-def buat_pdf_bytes(no_invoice, nama_pelanggan, item_nama, item_ukuran, qty, harga, jenis_transaksi, gudang_nama):
+def buat_pdf_bytes(no_invoice, nama_pelanggan, item_nama, item_ukuran, qty, harga, jenis_transaksi, gudang_nama, subtotal, nominal_diskon, total_akhir, cash_input, kembalian):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     story = []
@@ -112,24 +112,36 @@ def buat_pdf_bytes(no_invoice, nama_pelanggan, item_nama, item_ukuran, qty, harg
     story.append(Paragraph(f"<b>Pelanggan / Sales Lapangan:</b> {nama_pelanggan}", styles['Normal']))
     story.append(Spacer(1, 15))
     
-    total = qty * harga
-    
+    # Menyusun tabel invoice dengan kalkulasi diskon dan cash
     data = [
         ["Nama Barang", "Ukuran", "Lokasi", "Qty", "Satuan", "Harga", "Subtotal"],
-        [item_nama, item_ukuran, gudang_nama, str(qty), "Batang", f"Rp {harga:,}", f"Rp {total:,}"],
-        ["", "", "", "", "", "TOTAL:", f"RP {total:,}"]
+        [item_nama, item_ukuran, gudang_nama, str(qty), "Batang", f"Rp {harga:,}", f"Rp {subtotal:,}"],
+        ["", "", "", "", "", "Subtotal:", f"Rp {subtotal:,}"],
+        ["", "", "", "", "", "Diskon:", f"- Rp {nominal_diskon:,}"],
+        ["", "", "", "", "", "TOTAL AKHIR:", f"Rp {total_akhir:,}"]
     ]
     
-    table = Table(data, colWidths=[140, 80, 60, 40, 50, 70, 80])
-    table.setStyle(TableStyle([
+    if cash_input > 0:
+        data.append(["", "", "", "", "", "Tunai (Cash):", f"Rp {cash_input:,}"])
+        data.append(["", "", "", "", "", "Kembalian:", f"Rp {kembalian:,}"])
+    
+    table = Table(data, colWidths=[140, 80, 60, 40, 50, 95, 95])
+    
+    # Pengaturan style tabel
+    t_style = [
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1A365D")),
         ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
         ('ALIGN', (0,0), (-1,-1), 'LEFT'),
         ('BOTTOMPADDING', (0,0), (-1,0), 6),
-        ('GRID', (0,0), (-1,-2), 0.5, colors.grey),
-        ('LINEABOVE', (5,-1), (6,-1), 1, colors.black),
-        ('FONTNAME', (5,-1), (6,-1), 'Helvetica-Bold'),
-    ]))
+        ('GRID', (0,0), (-1,1), 0.5, colors.grey),
+        ('LINEABOVE', (5,2), (6,2), 1, colors.black),
+        ('FONTNAME', (5,4), (6,4), 'Helvetica-Bold'),
+    ]
+    
+    if cash_input > 0:
+        t_style.append(('FONTNAME', (5,6), (6,6), 'Helvetica-Bold'))
+        
+    table.setStyle(TableStyle(t_style))
     
     story.append(table)
     doc.build(story)
@@ -146,7 +158,7 @@ st.title("🏗️ Sistem Inventory Toko Besi Medan Jaya")
 st.caption("Aplikasi Manajemen Multi-Gudang & Pelacakan Supplier Bergaya Inflow")
 st.markdown("---")
 
-col1, col2 = st.columns([1.0, 1.0])
+col1, col2 = st.columns([1.1, 0.9])
 
 with col2:
     st.header("📦 Sisa Stok Gudang Real-Time")
@@ -208,16 +220,51 @@ with col1:
             qty = st.number_input("Banyaknya Barang (Batang)", min_value=1, value=5, step=1)
             harga = st.number_input("Harga Jual per Batang (Rp)", min_value=0, value=65000, step=500)
             
+            # --- INPUT BARU: DISKON & CASH ---
+            st.markdown("##### 💰 Potongan Harga & Pembayaran")
+            tipe_diskon = st.selectbox("Jenis Diskon", ["Tanpa Diskon", "Persentase (%)", "Nominal (Rupiah)"])
+            
+            nominal_diskon = 0
+            subtotal_kalkulasi = qty * harga
+            
+            if tipe_diskon == "Persentase (%)":
+                persen_diskon = st.number_input("Masukkan Persen (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.5)
+                nominal_diskon = int(subtotal_kalkulasi * (persen_diskon / 100))
+            elif tipe_diskon == "Nominal (Rupiah)":
+                nominal_diskon = st.number_input("Masukkan Potongan Rupiah (Rp)", min_value=0, max_value=subtotal_kalkulasi, value=0, step=1000)
+                
+            total_akhir = subtotal_kalkulasi - nominal_diskon
+            
+            # Tampilkan informasi ringkasan harga real-time
+            st.markdown(f"**Subtotal:** Rp {subtotal_kalkulasi:,}  |  **Diskon:** Rp {nominal_diskon:,}  |  **Total Tagihan:** :green[**Rp {total_akhir:,}**]")
+            
+            cash_input = st.number_input("Uang Tunai / Cash Terbuka (Optional - Rp)", min_value=0, value=0, step=5000)
+            
+            kembalian = 0
+            if cash_input > 0:
+                if cash_input < total_akhir:
+                    st.warning(f"⚠️ Uang tunai kurang sebesar: Rp {total_akhir - cash_input:,}")
+                else:
+                    kembalian = cash_input - total_akhir
+                    st.info(f"💵 **Uang Kembalian:** :blue[**Rp {kembalian:,}**]")
+            
+            st.markdown("---")
             proses_tombol = st.button("Proses Pengeluaran Barang & Cetak Nota")
             
             if proses_tombol:
-                sukses, info = update_stok_db(barang_pilihan[0], gudang_pilihan[0], qty, jenis_db)
-                if sukses:
-                    st.success(f"✅ Stok {barang_pilihan[1]} di {gudang_pilihan[1]} berhasil dikurangi!")
-                    pdf_data = buat_pdf_bytes(no_inv, pelanggan, barang_pilihan[1], barang_pilihan[2], qty, harga, jenis_db, gudang_pilihan[1])
-                    st.download_button(label="📥 Unduh PDF Invoice Nota", data=pdf_data, file_name=f"Invoice_{no_inv}.pdf", mime="application/pdf")
+                if cash_input > 0 and cash_input < total_akhir:
+                    st.error("❌ Transaksi dibatalkan karena jumlah uang cash kurang dari total tagihan!")
                 else:
-                    st.error(f"❌ Stok tidak cukup! Sisa di {gudang_pilihan[1]} hanya {info} batang.")
+                    sukses, info = update_stok_db(barang_pilihan[0], gudang_pilihan[0], qty, jenis_db)
+                    if sukses:
+                        st.success(f"✅ Stok {barang_pilihan[1]} di {gudang_pilihan[1]} berhasil dikurangi!")
+                        pdf_data = buat_pdf_bytes(
+                            no_inv, pelanggan, barang_pilihan[1], barang_pilihan[2], qty, harga, jenis_db, gudang_pilihan[1],
+                            subtotal_kalkulasi, nominal_diskon, total_akhir, cash_input, kembalian
+                        )
+                        st.download_button(label="📥 Unduh PDF Invoice Nota", data=pdf_data, file_name=f"Invoice_{no_inv}.pdf", mime="application/pdf")
+                    else:
+                        st.error(f"❌ Stok tidak cukup! Sisa di {gudang_pilihan[1]} hanya {info} batang.")
                     
         else:
             nama_sales_masuk = st.text_input("Nama Penyuplai / Sales Supplier", placeholder="Masukkan nama sales atau nama pabrik...")
@@ -296,7 +343,7 @@ with expand_gudang:
             conn.close()
 
 # ==========================================
-# 5. BERKAS UTILITY BACKUP DATABASE (BARU)
+# 5. BERKAS UTILITY BACKUP DATABASE
 # ==========================================
 st.markdown("---")
 st.subheader("💾 Sistem Keselamatan Data (Backup)")
