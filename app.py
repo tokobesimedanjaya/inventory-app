@@ -207,9 +207,16 @@ with col2:
         nama_barang = d[1]
         ukuran_barang = d[2]
         gudang_barang = d[4]
-        jumlah_stok = f"{d[5]} Batang"
+        stok_angka = d[5]  # Ambil nilai angka asli stok
+        jumlah_stok = f"{stok_angka} Batang"
         sales_terakhir = d[6]
         
+        # Logika Filter Baru: 
+        # Jika kolom pencarian KOSONG dan stoknya 0, maka dilewati (hide)
+        if not cari_produk.strip() and stok_angka == 0:
+            continue
+            
+        # Jika lolos filter di atas, lakukan pencarian normal seperti biasa
         if (cari_produk.lower() in nama_barang.lower() or 
             cari_produk.lower() in ukuran_barang.lower() or 
             cari_produk.lower() in gudang_barang.lower() or
