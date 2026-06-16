@@ -102,7 +102,6 @@ def buat_pdf_bytes(no_invoice, nama_pelanggan, item_nama, item_ukuran, qty, harg
     sub_style = ParagraphStyle('Sub', alignment=1, spaceAfter=2, fontSize=9, leading=12)
     note_style = ParagraphStyle('Note', alignment=1, spaceAfter=15, fontSize=8, textColor=colors.gray)
     
-    # Style teks khusus untuk sel tabel agar kode bold b tidak bocor
     cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=9)
     cell_right = ParagraphStyle('CellRight', parent=styles['Normal'], fontSize=9, alignment=2)
     cell_bold_right = ParagraphStyle('CellBoldRight', parent=styles['Normal'], fontSize=9, alignment=2, fontName='Helvetica-Bold')
@@ -117,7 +116,6 @@ def buat_pdf_bytes(no_invoice, nama_pelanggan, item_nama, item_ukuran, qty, harg
     story.append(Paragraph(f"<b>Pelanggan / Penerima:</b> {nama_pelanggan}", styles['Normal']))
     story.append(Spacer(1, 15))
     
-    # Menggunakan objek Paragraph agar teks terformat tebal/rapi di ReportLab
     data = [
         [Paragraph("<b>Nama Barang</b>", cell_style), Paragraph("<b>Ukuran</b>", cell_style), Paragraph("<b>Lokasi</b>", cell_style), Paragraph("<b>Qty</b>", cell_style), Paragraph("<b>Satuan</b>", cell_style), Paragraph("<b>Harga</b>", cell_right), Paragraph("<b>Subtotal</b>", cell_right)],
         [item_nama, item_ukuran, gudang_nama, str(qty), "Batang", f"Rp {harga:,}", f"Rp {subtotal:,}"],
@@ -206,11 +204,14 @@ with col1:
     if not barang_list:
         st.warning("⚠️ Sistem mendeteksi data master barang Anda masih kosong bersih.")
     else:
-        # Menambahkan parameter 'key' unik pada setiap widget untuk mencegah bug "Failed to fetch dynamically imported module"
-        jenis_transaksi = st.radio("Aktivitas Barang", ["Keluar (Penjualan/Sales)", "Masuk (Restock/Supplier)"], key="radio_jenis_transaksi")
-        jenis_db = "Keluar" if "Keluar" in jenis_transaksi else "Masuk"
+        # Perbaikan Struktural: Menggunakan index langsung untuk memastikan kondisi terbaca sempurna
+        opsi_aktivitas = ["Keluar (Penjualan/Sales)", "Masuk (Restock/Supplier)"]
+        jenis_transaksi = st.radio("Aktivitas Barang", opsi_aktivitas, key="radio_jenis_transaksi")
         
-        if jenis_db == "Keluar":
+        # Jauh lebih aman: Jika user memilih opsi pertama (index 0), otomatis masuk mode Keluar
+        jika_barang_keluar = (jenis_transaksi == opsi_aktivitas[0])
+        
+        if jika_barang_keluar:
             no_inv = st.text_input("Nomor Nota / Invoice", "INV-MJ-001", key="input_no_invoice")
             pelanggan = st.text_input("Nama Pelanggan / Sales Lapangan", "Toko Bangunan Sumber Rezeki", key="input_nama_pelanggan")
             
@@ -220,6 +221,7 @@ with col1:
             qty = st.number_input("Banyaknya Barang (Batang)", min_value=1, value=5, step=1, key="number_qty_keluar")
             harga = st.number_input("Harga Jual per Batang (Rp)", min_value=0, value=35000, step=500, key="number_harga_keluar")
             
+            # BLOK KASIR & DISKON (Dipaksa keluar tanpa kompromi)
             st.markdown("---")
             st.markdown("##### 💰 Potongan Harga & Pembayaran (Kasir)")
             
@@ -255,11 +257,11 @@ with col1:
                 if cash_input > 0 and cash_input < total_akhir:
                     st.error("❌ Transaksi gagal! Jumlah uang cash kurang dari total tagihan.")
                 else:
-                    sukses, info = update_stok_db(barang_pilihan[0], gudang_pilihan[0], qty, jenis_db)
+                    sukses, info = update_stok_db(barang_pilihan[0], gudang_pilihan[0], qty, "Keluar")
                     if sukses:
                         st.success(f"✅ Stok {barang_pilihan[1]} di {gudang_pilihan[1]} berhasil dikurangi!")
                         pdf_data = buat_pdf_bytes(
-                            no_inv, pelanggan, barang_pilihan[1], barang_pilihan[2], qty, harga, jenis_db, gudang_pilihan[1],
+                            no_inv, pelanggan, barang_pilihan[1], barang_pilihan[2], qty, harga, "Keluar", gudang_pilihan[1],
                             subtotal_kalkulasi, nominal_diskon, total_akhir, cash_input, kembalian
                         )
                         st.download_button(label="📥 Unduh PDF Invoice Nota Terbaru", data=pdf_data, file_name=f"Invoice_{no_inv}.pdf", mime="application/pdf", key="btn_download_pdf")
@@ -280,7 +282,7 @@ with col1:
                 if not nama_sales_masuk.strip():
                     st.warning("⚠️ Mohon isi Nama Penyuplai terlebih dahulu!")
                 else:
-                    sukses, info = update_stok_db(barang_pilihan[0], gudang_pilihan[0], qty, jenis_db, nama_sales=nama_sales_masuk)
+                    sukses, info = update_stok_db(barang_pilihan[0], gudang_pilihan[0], qty, "Masuk", nama_sales=nama_sales_masuk)
                     if sukses:
                         st.success(f"✅ Berhasil! Stok {barang_pilihan[1]} di {gudang_pilihan[1]} bertambah menjadi {info} Batang.")
                         st.rerun()
