@@ -64,6 +64,14 @@ def ambil_data_stok():
     conn.close()
     return data
 
+def cek_stok_tersedia(id_barang, id_gudang):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT jumlah_batang FROM stok WHERE id_barang = ? AND id_gudang = ?", (id_barang, id_gudang))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else 0
+
 def update_stok_db(id_barang, id_gudang, jumlah, jenis, nama_sales=None):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -90,9 +98,9 @@ def update_stok_db(id_barang, id_gudang, jumlah, jenis, nama_sales=None):
     return True, stok_baru
 
 # ==========================================
-# 2. GENERATOR INVOICE PDF 
+# 2. GENERATOR INVOICE MULTI-ITEM PDF 
 # ==========================================
-def buat_pdf_bytes(no_invoice, nama_pelanggan, item_nama, item_ukuran, qty, harga, jenis_transaksi, gudang_nama, subtotal, nominal_diskon, total_akhir, cash_input, kembalian):
+def buat_pdf_bytes(no_invoice, nama_pelanggan, daftar_item, subtotal, nominal_diskon, total_akhir, cash_input, kembalian):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     story = []
@@ -111,18 +119,38 @@ def buat_pdf_bytes(no_invoice, nama_pelanggan, item_nama, item_ukuran, qty, harg
     story.append(Paragraph("Untuk info lebih lanjut hubungi Whatsapp: 081361231558 | Hari minggu dan hari libur nasional tutup", note_style))
     story.append(Spacer(1, 5))
     
-    story.append(Paragraph(f"<b>Jenis Transaksi:</b> Barang {jenis_transaksi}", styles['Normal']))
+    story.append(Paragraph(f"<b>Jenis Transaksi:</b> Barang Keluar (Penjualan)", styles['Normal']))
     story.append(Paragraph(f"<b>No Nota:</b> {no_invoice}", styles['Normal']))
     story.append(Paragraph(f"<b>Pelanggan / Penerima:</b> {nama_pelanggan}", styles['Normal']))
     story.append(Spacer(1, 15))
     
-    data = [
-        [Paragraph("<b>Nama Barang</b>", cell_style), Paragraph("<b>Ukuran</b>", cell_style), Paragraph("<b>Lokasi</b>", cell_style), Paragraph("<b>Qty</b>", cell_style), Paragraph("<b>Satuan</b>", cell_style), Paragraph("<b>Harga</b>", cell_right), Paragraph("<b>Subtotal</b>", cell_right)],
-        [item_nama, item_ukuran, gudang_nama, str(qty), "Batang", f"Rp {harga:,}", f"Rp {subtotal:,}"],
-        ["", "", "", "", "", Paragraph("<b>Subtotal:</b>", cell_bold_right), Paragraph(f"Rp {subtotal:,}", cell_right)],
-        ["", "", "", "", "", Paragraph("<b>Diskon:</b>", cell_bold_right), Paragraph(f"- Rp {nominal_diskon:,}", cell_right)],
-        ["", "", "", "", "", Paragraph("<b>TOTAL AKHIR:</b>", cell_bold_right), Paragraph(f"Rp {total_akhir:,}", cell_bold_right)]
-    ]
+    # Header Tabel
+    data = [[
+        Paragraph("<b>Nama Barang</b>", cell_style), 
+        Paragraph("<b>Ukuran</b>", cell_style), 
+        Paragraph("<b>Lokasi</b>", cell_style), 
+        Paragraph("<b>Qty</b>", cell_style), 
+        Paragraph("<b>Satuan</b>", cell_style), 
+        Paragraph("<b>Harga</b>", cell_right), 
+        Paragraph("<b>Subtotal</b>", cell_right)
+    ]]
+    
+    # Looping memasukkan semua item di keranjang ke dalam baris tabel PDF
+    for item in daftar_item:
+        data.append([
+            item['nama'],
+            item['ukuran'],
+            item['gudang_nama'],
+            str(item['qty']),
+            "Batang",
+            f"Rp {item['harga']:,}",
+            f"Rp {item['item_subtotal']:,}"
+        ])
+        
+    # Kaki tabel kuitansi
+    data.append(["", "", "", "", "", Paragraph("<b>Subtotal:</b>", cell_bold_right), Paragraph(f"Rp {subtotal:,}", cell_right)])
+    data.append(["", "", "", "", "", Paragraph("<b>Diskon:</b>", cell_bold_right), Paragraph(f"- Rp {nominal_diskon:,}", cell_right)])
+    data.append(["", "", "", "", "", Paragraph("<b>TOTAL AKHIR:</b>", cell_bold_right), Paragraph(f"Rp {total_akhir:,}", cell_bold_right)])
     
     if cash_input > 0:
         data.append(["", "", "", "", "", Paragraph("<b>Tunai (Cash):</b>", cell_bold_right), Paragraph(f"Rp {cash_input:,}", cell_right)])
@@ -136,8 +164,8 @@ def buat_pdf_bytes(no_invoice, nama_pelanggan, item_nama, item_ukuran, qty, harg
         ('ALIGN', (0,0), (-1,1), 'LEFT'),
         ('ALIGN', (5,1), (6,-1), 'RIGHT'),
         ('BOTTOMPADDING', (0,0), (-1,0), 6),
-        ('GRID', (0,0), (-1,1), 0.5, colors.grey),
-        ('LINEABOVE', (5,2), (6,2), 1, colors.black),
+        ('GRID', (0,0), (-1, len(daftar_item)), 0.5, colors.grey),
+        ('LINEABOVE', (5, len(daftar_item)+1), (6, len(daftar_item)+1), 1, colors.black),
     ]
     table.setStyle(TableStyle(t_style))
     
@@ -147,13 +175,18 @@ def buat_pdf_bytes(no_invoice, nama_pelanggan, item_nama, item_ukuran, qty, harg
     return buffer
 
 # ==========================================
-# 3. TAMPILAN INTERFACES WEB (Streamlit)
+# 3. INITIALIZATION MEMORI KERANJANG
 # ==========================================
 init_db()
 
+if 'cart_keluar' not in st.session_state:
+    st.session_state.cart_keluar = []
+if 'cart_masuk' not in st.session_state:
+    st.session_state.cart_masuk = []
+
 st.set_page_config(page_title="Inventory Toko Besi Medan Jaya", layout="wide")
 st.title("🏗️ Sistem Inventory Toko Besi Medan Jaya")
-st.caption("Aplikasi Manajemen Multi-Gudang & Pelacakan Supplier Bergaya Inflow")
+st.caption("Aplikasi Manajemen Multi-Gudang dengan Fitur Keranjang Belanja Multi-Item")
 st.markdown("---")
 
 col1, col2 = st.columns([1.1, 0.9])
@@ -188,7 +221,7 @@ with col2:
     if tabel_tampil:
         st.table(tabel_tampil)
     else:
-        st.info("💡 Belum ada data stok barang. Silakan daftarkan varian besi baru pada formulir Pengaturan di bawah terlebih dahulu.")
+        st.info("💡 Belum ada data stok barang.")
 
 with col1:
     st.header("📝 Formulir Gerakan Barang")
@@ -204,88 +237,164 @@ with col1:
     if not barang_list:
         st.warning("⚠️ Sistem mendeteksi data master barang Anda masih kosong bersih.")
     else:
-        # Perbaikan Struktural: Menggunakan index langsung untuk memastikan kondisi terbaca sempurna
         opsi_aktivitas = ["Keluar (Penjualan/Sales)", "Masuk (Restock/Supplier)"]
         jenis_transaksi = st.radio("Aktivitas Barang", opsi_aktivitas, key="radio_jenis_transaksi")
-        
-        # Jauh lebih aman: Jika user memilih opsi pertama (index 0), otomatis masuk mode Keluar
         jika_barang_keluar = (jenis_transaksi == opsi_aktivitas[0])
         
+        # =========================================================
+        # INTERFACE: BARANG KELUAR (PENJUALAN DENGAN MULTI-ITEM)
+        # =========================================================
         if jika_barang_keluar:
+            st.markdown("#### 🏢 Data Nota & Input Item")
             no_inv = st.text_input("Nomor Nota / Invoice", "INV-MJ-001", key="input_no_invoice")
             pelanggan = st.text_input("Nama Pelanggan / Sales Lapangan", "Toko Bangunan Sumber Rezeki", key="input_nama_pelanggan")
             
-            barang_pilihan = st.selectbox("Pilih Barang", barang_list, format_func=lambda x: f"{x[1]} ({x[2]})", key="select_barang_keluar")
-            gudang_pilihan = st.selectbox("Ambil dari Gudang Berapa", gudang_list, format_func=lambda x: x[1], key="select_gudang_keluar")
+            subcol1, subcol2 = st.columns(2)
+            with subcol1:
+                barang_pilihan = st.selectbox("Pilih Barang", barang_list, format_func=lambda x: f"{x[1]} ({x[2]})", key="select_barang_keluar")
+                qty = st.number_input("Banyaknya Barang (Batang)", min_value=1, value=5, step=1, key="number_qty_keluar")
+            with subcol2:
+                gudang_pilihan = st.selectbox("Ambil dari Gudang Berapa", gudang_list, format_func=lambda x: x[1], key="select_gudang_keluar")
+                harga = st.number_input("Harga Jual per Batang (Rp)", min_value=0, value=35000, step=500, key="number_harga_keluar")
             
-            qty = st.number_input("Banyaknya Barang (Batang)", min_value=1, value=5, step=1, key="number_qty_keluar")
-            harga = st.number_input("Harga Jual per Batang (Rp)", min_value=0, value=35000, step=500, key="number_harga_keluar")
-            
-            # BLOK KASIR & DISKON (Dipaksa keluar tanpa kompromi)
-            st.markdown("---")
-            st.markdown("##### 💰 Potongan Harga & Pembayaran (Kasir)")
-            
-            tipe_diskon = st.selectbox("Jenis Diskon", ["Tanpa Diskon", "Persentase (%)", "Nominal (Rupiah)"], key="select_tipe_diskon")
-            
-            nominal_diskon = 0
-            subtotal_kalkulasi = qty * harga
-            
-            if tipe_diskon == "Persentase (%)":
-                persen_diskon = st.number_input("Masukkan Persen (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.5, key="number_persen_diskon")
-                nominal_diskon = int(subtotal_kalkulasi * (persen_diskon / 100))
-            elif tipe_diskon == "Nominal (Rupiah)":
-                nominal_diskon = st.number_input("Masukkan Potongan Rupiah (Rp)", min_value=0, max_value=subtotal_kalkulasi, value=0, step=1000, key="number_nominal_diskon")
+            # Tombol Tambah ke Keranjang Keluar
+            if st.button("➕ Tambahkan Ke Keranjang Nota", key="btn_add_cart_keluar"):
+                stok_tersedia = cek_stok_tersedia(barang_pilihan[0], gudang_pilihan[0])
                 
-            total_akhir = subtotal_kalkulasi - nominal_diskon
-            
-            st.markdown(f"**Subtotal:** Rp {subtotal_kalkulasi:,} | **Diskon:** Rp {nominal_diskon:,} | **Total Tagihan:** :green[**Rp {total_akhir:,}**]")
-            
-            cash_input = st.number_input("Uang Tunai / Cash dari Pembeli (Optional - Rp)", min_value=0, value=0, step=5000, key="number_cash_input")
-            
-            kembalian = 0
-            if cash_input > 0:
-                if cash_input < total_akhir:
-                    st.warning(f"⚠️ Uang tunai kurang sebesar: Rp {total_akhir - cash_input:,}")
+                # Hitung akumulasi qty yang sudah dimasukkan ke keranjang sebelumnya untuk barang yang sama
+                qty_di_keranjang = sum(item['qty'] for item in st.session_state.cart_keluar if item['id_barang'] == barang_pilihan[0] and item['id_gudang'] == gudang_pilihan[0])
+                
+                if stok_tersedia < (qty + qty_di_keranjang):
+                    st.error(f"❌ Stok tidak cukup! Sisa di {gudang_pilihan[1]} hanya {stok_tersedia} batang. Di keranjang sudah ada {qty_di_keranjang} batang.")
                 else:
-                    kembalian = cash_input - total_akhir
-                    st.info(f"💵 **Uang Kembalian:** :blue[**Rp {kembalian:,}**]")
+                    st.session_state.cart_keluar.append({
+                        'id_barang': barang_pilihan[0],
+                        'nama': barang_pilihan[1],
+                        'ukuran': barang_pilihan[2],
+                        'id_gudang': gudang_pilihan[0],
+                        'gudang_nama': gudang_pilihan[1],
+                        'qty': qty,
+                        'harga': harga,
+                        'item_subtotal': qty * harga
+                    })
+                    st.toast("Barang berhasil dimasukkan ke daftar kuitansi!")
             
-            st.markdown("---")
-            proses_tombol = st.button("Proses Pengeluaran Barang & Cetak Nota", key="btn_proses_keluar")
-            
-            if proses_tombol:
-                if cash_input > 0 and cash_input < total_akhir:
-                    st.error("❌ Transaksi gagal! Jumlah uang cash kurang dari total tagihan.")
-                else:
-                    sukses, info = update_stok_db(barang_pilihan[0], gudang_pilihan[0], qty, "Keluar")
-                    if sukses:
-                        st.success(f"✅ Stok {barang_pilihan[1]} di {gudang_pilihan[1]} berhasil dikurangi!")
-                        pdf_data = buat_pdf_bytes(
-                            no_inv, pelanggan, barang_pilihan[1], barang_pilihan[2], qty, harga, "Keluar", gudang_pilihan[1],
-                            subtotal_kalkulasi, nominal_diskon, total_akhir, cash_input, kembalian
-                        )
-                        st.download_button(label="📥 Unduh PDF Invoice Nota Terbaru", data=pdf_data, file_name=f"Invoice_{no_inv}.pdf", mime="application/pdf", key="btn_download_pdf")
-                    else:
-                        st.error(f"❌ Stok tidak cukup! Sisa di {gudang_pilihan[1]} hanya {info} batang.")
+            # TAMPILAN TABEL REKAP KERANJANG BELANJA KELUAR
+            if st.session_state.cart_keluar:
+                st.markdown("---")
+                st.markdown("### 🛒 Daftar Keranjang Belanja Saat Ini")
+                
+                for idx, item in enumerate(st.session_state.cart_keluar):
+                    st.markdown(f"**{idx+1}. {item['nama']} ({item['ukuran']})** | {item['qty']} Batang dari {item['gudang_nama']} | @ Rp {item['harga']:,} = **Rp {item['item_subtotal']:,}**")
+                
+                if st.button("🗑️ Kosongkan Keranjang", key="clear_cart_kel"):
+                    st.session_state.cart_keluar = []
+                    st.rerun()
+                
+                st.markdown("---")
+                st.markdown("##### 💰 Hitungan Total & Pembayaran Kasir")
+                
+                subtotal_kalkulasi = sum(item['item_subtotal'] for item in st.session_state.cart_keluar)
+                tipe_diskon = st.selectbox("Jenis Diskon", ["Tanpa Diskon", "Persentase (%)", "Nominal (Rupiah)"], key="select_tipe_diskon")
+                
+                nominal_diskon = 0
+                if tipe_diskon == "Persentase (%)":
+                    persen_diskon = st.number_input("Masukkan Persen (%)", min_value=0.0, max_value=100.0, value=0.0, step=0.5, key="number_persen_diskon")
+                    nominal_diskon = int(subtotal_kalkulasi * (persen_diskon / 100))
+                elif tipe_diskon == "Nominal (Rupiah)":
+                    nominal_diskon = st.number_input("Masukkan Potongan Rupiah (Rp)", min_value=0, max_value=subtotal_kalkulasi, value=0, step=1000, key="number_nominal_diskon")
                     
+                total_akhir = subtotal_kalkulasi - nominal_diskon
+                st.markdown(f"**Subtotal Gabungan:** Rp {subtotal_kalkulasi:,} | **Potongan Diskon:** Rp {nominal_diskon:,} | **Total Wajib Bayar:** :green[**Rp {total_akhir:,}**]")
+                
+                cash_input = st.number_input("Uang Tunai / Cash dari Pembeli (Rp)", min_value=0, value=0, step=5000, key="number_cash_input")
+                
+                kembalian = 0
+                if cash_input > 0:
+                    if cash_input < total_akhir:
+                        st.warning(f"⚠️ Uang tunai kurang sebesar: Rp {total_akhir - cash_input:,}")
+                    else:
+                        kembalian = cash_input - total_akhir
+                        st.info(f"💵 **Uang Kembalian Sisa:** :blue[**Rp {kembalian:,}**]")
+                
+                st.markdown("---")
+                proses_tombol = st.button("💥 PROSES & CETAK INVOICE GABUNGAN", key="btn_proses_keluar")
+                
+                if proses_tombol:
+                    if cash_input > 0 and cash_input < total_akhir:
+                        st.error("❌ Transaksi gagal! Jumlah uang cash kurang dari total tagihan.")
+                    else:
+                        # Eksekusi potong stok di database untuk semua item sekaligus
+                        sukses_semua = True
+                        for item in st.session_state.cart_keluar:
+                            sukses, info = update_stok_db(item['id_barang'], item['id_gudang'], item['qty'], "Keluar")
+                            if not sukses:
+                                sukses_semua = False
+                                st.error(f"❌ Gagal memproses {item['nama']}. Sisa stok mendadak tidak cukup!")
+                        
+                        if sukses_semua:
+                            st.success(f"🎉 Sukses! Seluruh barang berhasil dikeluarkan dari stok gudang resmi.")
+                            pdf_data = buat_pdf_bytes(
+                                no_inv, pelanggan, st.session_state.cart_keluar,
+                                subtotal_kalkulasi, nominal_diskon, total_akhir, cash_input, kembalian
+                            )
+                            st.download_button(label="📥 Unduh PDF Invoice Nota Gabungan", data=pdf_data, file_name=f"Invoice_Gabungan_{no_inv}.pdf", mime="application/pdf", key="btn_download_pdf")
+                            # Kosongkan keranjang setelah sukses transaksi
+                            st.session_state.cart_keluar = []
+            else:
+                st.info("🛒 Keranjang nota Anda masih kosong. Silakan pilih barang di atas lalu klik 'Tambahkan Ke Keranjang Nota'.")
+
+        # =========================================================
+        # INTERFACE: BARANG MASUK (RESTOCK DARI SALES BANYAK BARANG)
+        # =========================================================
         else:
+            st.markdown("#### 🏢 Data Pengiriman Supplier")
             nama_sales_masuk = st.text_input("Nama Penyuplai / Sales Supplier", placeholder="Masukkan nama sales atau nama pabrik...", key="input_sales_masuk")
             
-            barang_pilihan = st.selectbox("Pilih Barang yang Masuk", barang_list, format_func=lambda x: f"{x[1]} ({x[2]})", key="select_barang_masuk")
-            gudang_pilihan = st.selectbox("Simpan di Gudang Berapa", gudang_list, format_func=lambda x: x[1], key="select_gudang_masuk")
+            subcol1, subcol2 = st.columns(2)
+            with subcol1:
+                barang_pilihan = st.selectbox("Pilih Barang yang Masuk", barang_list, format_func=lambda x: f"{x[1]} ({x[2]})", key="select_barang_masuk")
+            with subcol2:
+                gudang_pilihan = st.selectbox("Simpan di Gudang Berapa", gudang_list, format_func=lambda x: x[1], key="select_gudang_masuk")
             
-            qty = st.number_input("Banyaknya Barang (Batang)", min_value=1, value=50, step=1, key="number_qty_masuk")
+            qty = st.number_input("Banyaknya Barang Masuk (Batang)", min_value=1, value=50, step=1, key="number_qty_masuk")
             
-            proses_tombol = st.button("Simpan Stok Masuk", key="btn_simpan_masuk")
-            
-            if proses_tombol:
+            if st.button("➕ Masukkan Daftar Restock", key="btn_add_cart_masuk"):
                 if not nama_sales_masuk.strip():
                     st.warning("⚠️ Mohon isi Nama Penyuplai terlebih dahulu!")
                 else:
-                    sukses, info = update_stok_db(barang_pilihan[0], gudang_pilihan[0], qty, "Masuk", nama_sales=nama_sales_masuk)
-                    if sukses:
-                        st.success(f"✅ Berhasil! Stok {barang_pilihan[1]} di {gudang_pilihan[1]} bertambah menjadi {info} Batang.")
-                        st.rerun()
+                    st.session_state.cart_masuk.append({
+                        'id_barang': barang_pilihan[0],
+                        'nama': barang_pilihan[1],
+                        'id_gudang': gudang_pilihan[0],
+                        'gudang_nama': gudang_pilihan[1],
+                        'qty': qty,
+                        'sales': nama_sales_masuk
+                    })
+                    st.toast("Item berhasil dicatat ke daftar tunggu restock!")
+
+            # TAMPILAN REKAP DAFTAR BARANG MASUK
+            if st.session_state.cart_masuk:
+                st.markdown("---")
+                st.markdown("### 📥 Daftar Tunggu Restock Masuk")
+                
+                for idx, item in enumerate(st.session_state.cart_masuk):
+                    st.markdown(f"**{idx+1}. {item['nama']}** -> +{item['qty']} Batang ke {item['gudang_nama']} (Sales: {item['sales']})")
+                
+                if st.button("🗑️ Bersihkan Daftar Tunggu", key="clear_cart_mas"):
+                    st.session_state.cart_masuk = []
+                    st.rerun()
+                
+                st.markdown("---")
+                if st.button("💾 SIMPAN SEMUA BARANG MASUK KE DATABASE", key="btn_simpan_masuk"):
+                    for item in st.session_state.cart_masuk:
+                        update_stok_db(item['id_barang'], item['id_gudang'], item['qty'], "Masuk", nama_sales=item['sales'])
+                    
+                    st.success(f"✅ Sukses! Semua item restock massal berhasil disuntikkan ke dalam stok gudang masing-masing.")
+                    st.session_state.cart_masuk = []
+                    st.rerun()
+            else:
+                st.info("📥 Belum ada daftar barang masuk. Masukkan item di atas lalu klik 'Masukkan Daftar Restock'.")
 
 # ==========================================
 # 4. FITUR TAMBAH BARANG & GUDANG BARU
