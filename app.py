@@ -5,6 +5,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 import io
+import os
 
 # ==========================================
 # 1. MANAGEMENT DATABASE (SQLite)
@@ -293,3 +294,27 @@ with expand_gudang:
                 st.success(f"🎉 {nama_g_baru} berhasil ditambahkan!")
                 st.rerun()
             conn.close()
+
+# ==========================================
+# 5. BERKAS UTILITY BACKUP DATABASE (BARU)
+# ==========================================
+st.markdown("---")
+st.subheader("💾 Sistem Keselamatan Data (Backup)")
+col_back1, col_back2 = st.columns([1.5, 1.0])
+
+with col_back1:
+    st.info("💡 **Tips Keamanan:** Lakukan backup database ini setiap sore hari setelah toko tutup. File hasil download ini bisa disimpan di laptop/HP Anda sebagai cadangan jika sewaktu-waktu server cloud mengalami penyegaran otomatis.")
+
+with col_back2:
+    if os.path.exists('inventory_medan_jaya.db'):
+        with open('inventory_medan_jaya.db', 'rb') as f:
+            db_bytes = f.read()
+        
+        st.download_button(
+            label="📥 Download Database Backup (.db)",
+            data=db_bytes,
+            file_name="inventory_medan_jaya_backup.db",
+            mime="application/octet-stream"
+        )
+    else:
+        st.error("Berkas database belum terbentuk.")
