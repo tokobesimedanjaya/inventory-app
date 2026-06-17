@@ -263,8 +263,12 @@ with col1:
             
             subcol1, subcol2 = st.columns(2)
             with subcol1:
-                barang_pilihan = st.selectbox("Pilih Barang", barang_list, format_func=lambda x: f"{x[1]} ({x[2]})", key="select_barang_keluar")
-                qty = st.number_input("Banyaknya Barang (Batang)", min_value=1, value=5, step=1, key="number_qty_keluar")
+                barang_pilihan = st.selectbox(
+    "Pilih Barang", 
+    barang_list, 
+    format_func=lambda x: x[1], # <-- Hanya menampilkan nama asli database (tanpa kurung sistem)
+    key="select_barang_keluar"
+)
             with subcol2:
                 gudang_pilihan = st.selectbox("Ambil dari Gudang Berapa", gudang_list, format_func=lambda x: x[1], key="select_gudang_keluar")
                 # Mengubah input harga dan MENAMBAHKAN pilih satuan baru di bawahnya
