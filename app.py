@@ -267,7 +267,9 @@ with col1:
                 qty = st.number_input("Banyaknya Barang (Batang)", min_value=1, value=5, step=1, key="number_qty_keluar")
             with subcol2:
                 gudang_pilihan = st.selectbox("Ambil dari Gudang Berapa", gudang_list, format_func=lambda x: x[1], key="select_gudang_keluar")
-                harga = st.number_input("Harga Jual per Batang (Rp)", min_value=0, value=35000, step=500, key="number_harga_keluar")
+                # Mengubah input harga dan MENAMBAHKAN pilih satuan baru di bawahnya
+                harga = st.number_input("Harga per Satuan (Rp)", min_value=0, value=35000, step=500, key="number_harga_keluar")
+                satuan_pilihan = st.selectbox("Pilih Satuan", ["Batang", "Kilogram", "Ons", "Pcs"], key="select_satuan_keluar")
             
             if st.button("➕ Tambahkan Ke Keranjang Nota", key="btn_add_cart_keluar"):
                 stok_tersedia = cek_stok_tersedia(barang_pilihan[0], gudang_pilihan[0])
@@ -412,22 +414,55 @@ with expand_barang:
     st.write("**➕ Tambah Varian Barang Baru**")
     if gudang_list:
         with st.form("form_barang", clear_on_submit=True):
-            nama_baru = st.text_input("Nama Barang Baru", placeholder="Misal: Besi Beton Polos 10mm")
-            ukuran_baru = st.text_input("Ukuran / Spesifikasi Panjang", placeholder="Misal: 10mm x 12m")
+            # Kotak input tunggal untuk nama dan ukuran
+            input_gabungan = st.text_input(
+                "Nama & Ukuran Barang Baru", 
+                placeholder="Contoh ketik langsung: holo 30x30x1.6(0.8pas) atau kawatlas 3.2mm"
+            )
+            
+            # FITUR BARU: Tambahan Pilihan Satuan Default untuk Barang Ini
+            satuan_baru = st.selectbox(
+                "Pilih Satuan Barang", 
+                ["Batang", "Kilogram", "Ons", "Pcs"], 
+                key="select_satuan_barang_baru"
+            )
+            
             submit_b = st.form_submit_button("Daftarkan Barang Baru")
             
-            if submit_b and nama_baru and ukuran_baru:
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO barang (nama, ukuran, satuan) VALUES (?, ?, 'Batang')", (nama_baru, ukuran_baru))
-                id_b = cursor.lastrowid
-                all_gudang = cursor.execute("SELECT id FROM gudang").fetchall()
-                for g in all_gudang:
-                    cursor.execute("INSERT INTO stok (id_barang, id_gudang, jumlah_batang, sales_terakhir) VALUES (?, ?, 0, '-')", (id_b, g[0]))
-                conn.commit()
-                conn.close()
-                st.success(f"🎉 Produk '{nama_baru}' berhasil didaftarkan!")
-                st.rerun()
+            if submit_b and input_gabungan:
+                # Bersihkan spasi di awal dan akhir teks input terlebih dahulu
+                input_bersih = input_gabungan.strip()
+                
+                # Memeriksa apakah ada spasi di dalam teks input
+                if " " in input_bersih:
+                    # Memecah berdasarkan spasi PERTAMA saja (maxsplit=1)
+                    nama_baru, ukuran_baru = input_bersih.split(" ", 1)
+                    
+                    # Bersihkan spasi sisa di sekitar teks
+                    nama_baru = nama_baru.strip()
+                    ukuran_baru = ukuran_baru.strip()
+                    
+                    if nama_baru and ukuran_baru:
+                        conn = get_db_connection()
+                        cursor = conn.cursor()
+                        
+                        # KODE DIPERBAIKI: Mengganti teks 'Batang' statis menjadi variabel satuan_baru sesuai pilihan Anda
+                        cursor.execute(
+                            "INSERT INTO barang (nama, ukuran, satuan) VALUES (?, ?, ?)", 
+                            (nama_baru, ukuran_baru, satuan_baru)
+                        )
+                        
+                        id_b = cursor.lastrowid
+                        all_gudang = cursor.execute("SELECT id FROM gudang").fetchall()
+                        for g in all_gudang:
+                            cursor.execute("INSERT INTO stok (id_barang, id_gudang, jumlah_batang, sales_terakhir) VALUES (?, ?, 0, '-')", (id_b, g[0]))
+                        
+                        conn.commit()
+                        conn.close()
+                        st.success(f"🎉 Produk '{nama_baru}' ({ukuran_baru}) dengan satuan '{satuan_baru}' berhasil didaftarkan!")
+                        st.rerun()
+                else:
+                    st.error("❌ Mohon beri jarak spasi antara Nama Barang dan Ukurannya! Contoh: kawatlas 3.2mm")
 
 with expand_gudang:
     st.write("**🏢 Tambah Lokasi Gudang Baru**")
