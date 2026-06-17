@@ -365,12 +365,13 @@ with col1:
             with subcol2:
                 gudang_pilihan = st.selectbox("Simpan di Gudang Berapa", gudang_list, format_func=lambda x: x[1], key="select_gudang_masuk")
             
-            # OTOMATISASI: Mengambil satuan asli barang dari database (index ke-3 dari database barang)
-            # Jika database lama belum ada kolom satuan di barang_list, default ke 'Batang'
-            satuan_barang = barang_pilihan[3] if len(barang_pilihan) > 3 else "Batang"
-            
-            # Label box input sekarang otomatis berubah mengikuti satuan barang (Batang/Kilogram/Ons/Pcs)
-            qty = st.number_input(f"Banyaknya Barang Masuk ({satuan_barang})", min_value=1, value=50, step=1, key="number_qty_masuk")
+            # MEMBUAT 2 KOLOM: Kolom kiri untuk jumlah barang, kolom kanan untuk PILIHAN SATUAN
+            qty_col1, qty_col2 = st.columns(2)
+            with qty_col1:
+                qty = st.number_input("Banyaknya Barang Masuk", min_value=1, value=50, step=1, key="number_qty_masuk")
+            with qty_col2:
+                # FITUR BARU: Dropdown pilihan satuan untuk barang masuk
+                satuan_pilihan_masuk = st.selectbox("Satuan", ["Batang", "Kilogram", "Ons", "Pcs"], key="select_satuan_masuk")
             
             if st.button("➕ Masukkan Daftar Restock", key="btn_add_cart_masuk"):
                 if not nama_sales_masuk.strip():
@@ -379,11 +380,11 @@ with col1:
                     st.session_state.cart_masuk.append({
                         'id_barang': barang_pilihan[0],
                         'nama': barang_pilihan[1],
-                        'ukuran': barang_pilihan[2],
+                        'ukuran': barang_pilihan[2] if len(barang_pilihan) > 2 else "",
                         'id_gudang': gudang_pilihan[0],
                         'gudang_nama': gudang_pilihan[1],
                         'qty': qty,
-                        'satuan': satuan_barang, # <-- Menyimpan satuan asli barang ke keranjang restock
+                        'satuan': satuan_pilihan_masuk, # <-- Menyimpan satuan yang Anda pilih ke daftar tunggu
                         'sales': nama_sales_masuk
                     })
                     st.toast("Item berhasil dicatat ke daftar tunggu restock!")
@@ -393,7 +394,7 @@ with col1:
                 st.markdown("### 📥 Daftar Tunggu Restock Masuk")
                 
                 for idx, item in enumerate(st.session_state.cart_masuk, start=1):
-                    # Tampilan daftar tunggu sekarang otomatis memuat satuan yang benar, bukan cuma 'Batang'
+                    # Tampilan daftar tunggu sekarang otomatis memuat pilihan satuan Anda (bukan teks 'Batang' mati)
                     st.markdown(f"**{idx}. {item['nama']} ({item['ukuran']})** -> +{item['qty']} {item['satuan']} ke {item['gudang_nama']} (Sales: {item['sales']})")
                 
                 if st.button("🗑️ Bersihkan Daftar Tunggu", key="clear_cart_mas"):
