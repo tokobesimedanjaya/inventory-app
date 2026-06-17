@@ -266,7 +266,8 @@ with col1:
                 barang_pilihan = st.selectbox(
     "Pilih Barang", 
     barang_list, 
-    format_func=lambda x: x[1], # <-- Hanya menampilkan nama asli database (tanpa kurung sistem)
+    # Logika pintar: gabungkan nama dan ukuran dengan spasi biasa jika kolom ukuran ada isinya
+    format_func=lambda x: f"{x[1]} {x[2]}" if (len(x) > 2 and x[2] and x[2] != '-') else x[1],
     key="select_barang_keluar"
 )
             with subcol2:
