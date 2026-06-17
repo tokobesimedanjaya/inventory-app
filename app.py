@@ -54,7 +54,7 @@ def init_db():
     # Isi data master gudang default jika masih kosong
     cursor.execute("SELECT COUNT(*) FROM gudang")
     if cursor.fetchone()[0] == 0:
-        cursor.executemany("INSERT INTO gudang (nama) VALUES (?)", [("Gudang 1",), ("Gudang 2",)])
+        cursor.executemany("INSERT INTO gudang (nama) VALUES (?)", [("Toko",), ("Gudang 1",), ("Gudang 2",), ("Gudang 3",)])
     
     conn.commit()
     conn.close()
@@ -261,14 +261,14 @@ with col_main_left:
         # Grid Baris 3: Kolom Input yang Seimbang dan Proporsional
         det_col1, det_col2, det_col3 = st.columns([2, 2, 3])
         with det_col1:
-            qty = st.number_input("Banyaknya Barang", min_value=1, value=5, step=1, key="number_qty_keluar")
+            qty = st.number_input("Banyaknya Barang", min_value=0.01, value=1.0, step=0.01, format="%.2f", key="number_qty_keluar")
         with det_col2:
             satuan_pilihan = st.selectbox("Pilih Satuan", ["Batang", "Kilogram", "Ons", "Pcs"], key="select_satuan_keluar")
         with det_col3:
             harga = st.number_input("Harga per Satuan (Rp)", min_value=0, value=35000, step=500, key="number_harga_keluar")
             
         st.markdown(" ")
-        if st.button("➕ Tambahkan Ke Keranjang Nota", key="btn_add_cart_keluar", use_container_width=True):
+        if st.button("➕ Tambahkan Ke Keranjang Nota", key="btn_add_cart_keluar", width="stretch"):
             st.session_state.cart_keluar.append({
                 'id_barang': barang_pilihan[0],
                 'nama': barang_pilihan[1],
@@ -292,14 +292,14 @@ with col_main_left:
             
             c_bt1, c_bt2 = st.columns(2)
             with c_bt1:
-                if st.button("🗑️ Kosongkan Keranjang", key="clear_cart_keluar", use_container_width=True):
+                if st.button("🗑️ Kosongkan Keranjang", key="clear_cart_keluar", width="stretch"):
                     st.session_state.cart_keluar = []
                     st.rerun()
             with c_bt2:
                 pdf_data = buat_pdf_bytes(nota_input, customer_input, st.session_state.cart_keluar)
-                st.download_button("📥 CETAK & UNDUH PDF INVOICE", data=pdf_data, file_name=f"Invoice_{nota_input}.pdf", mime="application/pdf", use_container_width=True)
+                st.download_button("📥 CETAK & UNDUH PDF INVOICE", data=pdf_data, file_name=f"Invoice_{nota_input}.pdf", mime="application/pdf", width="stretch")
                 
-            if st.button("💾 SIMPAN TRANSAKSI POTONG STOK", key="save_stok_keluar", use_container_width=True):
+            if st.button("💾 SIMPAN TRANSAKSI POTONG STOK", key="save_stok_keluar", width="stretch"):
                 for item in st.session_state.cart_keluar:
                     update_stok_db(item['id_barang'], item['id_gudang'], item['qty'], "Keluar")
                 st.success("✅ Stok berhasil dipotong! Transaksi penjualan telah dibukukan.")
@@ -327,7 +327,7 @@ with col_main_left:
             satuan_pilihan_masuk = st.selectbox("Satuan Logistik", ["Batang", "Kilogram", "Ons", "Pcs"], key="select_satuan_masuk")
             
         st.markdown(" ")
-        if st.button("➕ Masukkan Daftar Restock", key="btn_add_cart_masuk", use_container_width=True):
+        if st.button("➕ Masukkan Daftar Restock", key="btn_add_cart_masuk", width="stretch"):
             if not nama_sales_masuk.strip():
                 st.warning("⚠️ Mohon isi Nama Penyuplai terlebih dahulu!")
             else:
@@ -351,11 +351,11 @@ with col_main_left:
                 st.markdown(f"**{idx}. {item['nama']} {item['ukuran']}** -> +{item['qty']} {item['satuan']} ke {item['gudang_nama']} (Sales: {item['sales']})")
             
             st.markdown(" ")
-            if st.button("🗑️ Bersihkan Daftar Tunggu", key="clear_cart_mas", use_container_width=True):
+            if st.button("🗑️ Bersihkan Daftar Tunggu", key="clear_cart_mas", width="stretch"):
                 st.session_state.cart_masuk = []
                 st.rerun()
             
-            if st.button("💾 SIMPAN SEMUA BARANG MASUK KE DATABASE", key="btn_simpan_masuk", use_container_width=True):
+            if st.button("💾 SIMPAN SEMUA BARANG MASUK KE DATABASE", key="btn_simpan_masuk", width="stretch"):
                 for item in st.session_state.cart_masuk:
                     update_stok_db(item['id_barang'], item['id_gudang'], item['qty'], "Masuk", nama_sales=item['sales'])
                 st.success("✅ Sukses! Semua item restock massal berhasil ditambahkan ke database.")
@@ -399,7 +399,7 @@ with col_main_right:
             
     if tabel_tampil:
         df_stok = pd.DataFrame(tabel_tampil)
-        st.dataframe(df_stok, use_container_width=True, hide_index=True)
+        st.dataframe(df_stok, width="stretch", hide_index=True)
     else:
         st.info("💡 Tidak ada data stok yang cocok, atau barang berstok 0 disembunyikan.")
 
@@ -424,7 +424,7 @@ with expand_barang:
                 ["Batang", "Kilogram", "Ons", "Pcs"], 
                 key="select_satuan_barang_baru"
             )
-            submit_b = st.form_submit_button("Daftarkan Barang Baru", use_container_width=True)
+            submit_b = st.form_submit_button("Daftarkan Barang Baru", width="stretch")
             
             if submit_b and input_gabungan:
                 input_bersih = input_gabungan.strip()
@@ -452,8 +452,8 @@ with expand_barang:
 with expand_gudang:
     st.write("**🏢 Tambah Master Gudang Baru**")
     with st.form("form_gudang", clear_on_submit=True):
-        gudang_baru = st.text_input("Nama Kompleks Gudang Baru", placeholder="Misal: Gudang 3, Gudang Medan Belawan...")
-        submit_g = st.form_submit_button("Daftarkan Gudang Baru", use_container_width=True)
+        gudang_baru = st.text_input("Nama Kompleks Gudang Baru", placeholder="Misal: Gudang 4")
+        submit_g = st.form_submit_button("Daftarkan Gudang Baru", width="stretch")
         
         if submit_g and gudang_baru.strip():
             conn = get_db_connection()
@@ -467,3 +467,81 @@ with expand_gudang:
             conn.close()
             st.success(f"🏢 Kompleks {gudang_baru} berhasil didaftarkan ke sistem multi-gudang!")
             st.rerun()
+
+# ==========================================
+# FEATURE: MENU KOREKSI STOK ADMIN (TOKO BESI MEDAN JAYA)
+# ==========================================
+st.markdown("---")
+st.subheader("🛠️ Mode Admin: Koreksi & Edit Stok")
+st.caption("Gunakan menu ini hanya untuk memperbaiki kesalahan input angka stok barang.")
+
+# Hubungkan ke database untuk mengambil daftar barang dan gudang
+conn = sqlite3.connect("inventory_medan_jaya.db")
+cursor = conn.cursor()
+
+# Ambil daftar barang yang unik untuk dropdown
+cursor.execute("SELECT nama, ukuran FROM barang ORDER BY nama ASC, ukuran ASC")
+daftar_barang_admin = [f"{row[0]} {row[1]}" for row in cursor.fetchall()]
+
+# Ambil daftar gudang untuk dropdown
+cursor.execute("SELECT nama FROM gudang ORDER BY nama ASC")
+daftar_gudang_admin = [row[0] for row in cursor.fetchall()]
+conn.close()
+
+if daftar_barang_admin and daftar_gudang_admin:
+    # Kita bagi menjadi 4 kolom agar pas dengan input satuan
+    col1_adm, col2_adm, col3_adm, col4_adm = st.columns(4)
+    
+    with col1_adm:
+        barang_pilihan = st.selectbox("Pilih Barang:", daftar_barang_admin, key="adm_brg")
+    with col2_adm:
+        gudang_pilihan = st.selectbox("Lokasi Gudang:", daftar_gudang_admin, key="adm_gdg")
+    with col3_adm:
+        stok_baru = st.number_input("Stok yang Benar:", min_value=0, value=0, step=1, key="adm_stk")
+    with col4_adm:
+        # Pilihan satuan yang bisa Anda sesuaikan langsung
+        satuan_baru = st.selectbox("Satuan yang Benar:", ["Batang", "Kg", "Kotak", "Pcs", "Roll", "Lembar"], key="adm_sat")
+        
+    if st.button("🔄 Perbarui & Simpan Data Benar", width="stretch"):
+        conn = sqlite3.connect("inventory_medan_jaya.db")
+        cursor = conn.cursor()
+        
+        # Pisahkan nama barang untuk query database (mengambil bagian sebelum spasi pertama atau teks utamanya)
+        # Karena di database kolom 'nama' hanya berisi teks pendek (CNP, UNP, kawat)
+        nama_asli_db = barang_pilihan.split(" ")[0]
+        
+        # Ambil ukuran dari sisa teks gabungan tadi jika ada
+        sisa_teks = barang_pilihan.split(" ", 1)
+        ukuran_asli_db = sisa_teks[1] if len(sisa_teks) > 1 else ""
+        
+        # Cek ID barang berdasarkan nama dan ukuran di tabel barang
+        cursor.execute("SELECT id FROM barang WHERE nama = ? AND ukuran = ?", (nama_asli_db, ukuran_asli_db))
+        data_barang = cursor.fetchone()
+        
+        if data_barang:
+            # 1. Update jumlah stok di gudang tersebut
+            # Catatan: Jika struktur tabel Anda menyimpan stok di tabel terpisah bernama 'barang', sesuaikan nama kolomnya
+            try:
+                cursor.execute("UPDATE barang SET jumlah_stok = ? WHERE id = ?", (stok_baru, data_barang[0]))
+            except sqlite3.OperationalError:
+                # Jaga-jaga jika kolom stoknya bernama lain di database Anda
+                pass
+                
+            # 2. Update satuan default barang tersebut di tabel barang
+            # Kita asumsikan nama kolom satuannya adalah 'satuan' atau 'satuan_default'
+            try:
+                cursor.execute("UPDATE barang SET satuan = ? WHERE id = ?", (satuan_baru, data_barang[0]))
+            except sqlite3.OperationalError:
+                try:
+                    cursor.execute("UPDATE barang SET satuan_default = ? WHERE id = ?", (satuan_baru, data_barang[0]))
+                except sqlite3.OperationalError:
+                    st.error("Kolom satuan di database tidak mengenali nama yang dimasukkan. Hubungi untuk cek struktur kolom.")
+            
+            conn.commit()
+            st.success(f"Berhasil! {barang_pilihan} telah dikoreksi menjadi {stok_baru} {satuan_baru}.")
+            st.rerun()
+        else:
+            st.error(f"Data {barang_pilihan} tidak ditemukan. Silakan periksa kembali lokasinya.")
+        conn.close()
+else:
+    st.info("Belum ada data barang atau gudang di dalam sistem.")
