@@ -16,7 +16,7 @@ st.set_page_config(page_title="Inventory Toko Besi Medan Jaya", layout="wide", p
 # Inisialisasi Database SQLite
 def get_db_connection():
     conn = sqlite3.connect("inventory_medan_jaya.db")
-    conn.row_factory = sqlite3.Row
+    # row_factory tidak digunakan secara global agar mengembalikan tuple biasa yang aman untuk Streamlit
     return conn
 
 def init_db():
@@ -29,7 +29,7 @@ def init_db():
             nama TEXT NOT NULL
         )
     """)
-    # Tabel Barang (Kolom Satuan sudah terintegrasi)
+    # Tabel Barang
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS barang (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -174,7 +174,7 @@ def buat_pdf_bytes(no_nota, nama_pelanggan, daftar_item):
     story.append(item_table)
     story.append(Spacer(1, 10))
     
-    # Ringkasan Finansial Bawah (SUDAH DIPERBAIKI)
+    # Ringkasan Finansial Bawah
     fin_label = ParagraphStyle('FinLabel', fontName='Helvetica-Bold', fontSize=10, alignment=2, textColor=colors.HexColor('#1E293B'))
     fin_val = ParagraphStyle('FinVal', fontName='Helvetica', fontSize=10, alignment=2, textColor=colors.HexColor('#1E293B'))
     fin_val_bold = ParagraphStyle('FinValBold', fontName='Helvetica-Bold', fontSize=10, alignment=2, textColor=colors.HexColor('#B91C1C'))
@@ -195,17 +195,23 @@ def buat_pdf_bytes(no_nota, nama_pelanggan, daftar_item):
     return buffer.getvalue()
 
 
-# Data Sourcing untuk Interface
+# Data Sourcing untuk Interface - Menggunakan list comprehension untuk konversi data ke standard Tuple (Solusi Fix Pickle Error)
 conn = get_db_connection()
-barang_list = conn.execute("SELECT id, nama, ukuran, satuan FROM barang").fetchall()
-gudang_list = conn.execute("SELECT id, nama FROM gudang").fetchall()
-data_stok_raw = conn.execute("""
-    SELECT s.id_barang, b.nama, b.ukuran, s.id_gudang, g.nama as gudang_nama, s.jumlah_batang, b.satuan, s.sales_terakhir
-    FROM stok s
-    JOIN barang b ON s.id_barang = b.id
-    JOIN gudang g ON s.id_gudang = g.id
-    ORDER BY b.nama ASC
-""").fetchall()
+barang_list = [(r[0], r[1], r[2], r[3]) for r in conn.execute("SELECT id, nama, ukuran, satuan FROM barang").fetchall()]
+gudang_list = [(r[0], r[1]) for r in conn.execute("SELECT id, nama FROM gudang").fetchall()]
+data_stok_raw = [
+    {
+        'id_barang': r[0], 'nama': r[1], 'ukuran': r[2], 'id_gudang': r[3], 
+        'gudang_nama': r[4], 'jumlah_batang': r[5], 'satuan': r[6], 'sales_terakhir': r[7]
+    } 
+    for r in conn.execute("""
+        SELECT s.id_barang, b.nama, b.ukuran, s.id_gudang, g.nama as gudang_nama, s.jumlah_batang, b.satuan, s.sales_terakhir
+        FROM stok s
+        JOIN barang b ON s.id_barang = b.id
+        JOIN gudang g ON s.id_gudang = g.id
+        ORDER BY b.nama ASC
+    """).fetchall()
+]
 conn.close()
 
 
@@ -387,7 +393,7 @@ with col_main_right:
             tabel_tampil.append({
                 "Nama Barang": gabung_nama_tabel,
                 "Lokasi Gudang": gudang_b,
-                "Jumlah Stok": f"{int(stok_angka) if stok_angka.is_integer() else stok_angka} {satuan_b}",
+                "Jumlah Stok": f"{int(stok_angka) if isinstance(stok_angka, float) and stok_angka.is_integer() else stok_angka} {satuan_b}",
                 "Penyuplai Terakhir": sales_b
             })
             
