@@ -259,7 +259,7 @@ with col1:
         if jika_barang_keluar:
             st.markdown("#### 🏢 Data Nota & Input Item")
             no_inv = st.text_input("Nomor Nota / Invoice", "INV-MJ-001", key="input_no_invoice")
-            pelanggan = st.text_input("Nama Pelanggan / Sales Lapangan", "Toko Bangunan Sumber Rezeki", key="input_nama_pelanggan")
+            pelanggan = st.text_input("Nama Pelanggan", "Cash", key="input_nama_pelanggan")
             
             subcol1, subcol2 = st.columns(2)
             with subcol1:
