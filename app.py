@@ -366,7 +366,13 @@ with col1:
             
             subcol1, subcol2 = st.columns(2)
             with subcol1:
-                barang_pilihan = st.selectbox("Pilih Barang yang Masuk", barang_list, format_func=lambda x: f"{x[1]} ({x[2]})", key="select_barang_masuk")
+                barang_pilihan = st.selectbox(
+    "Pilih Barang", 
+    barang_list, 
+    # Logika pintar: gabungkan nama dan ukuran dengan spasi biasa jika kolom ukuran ada isinya
+    format_func=lambda x: f"{x[1]} {x[2]}" if (len(x) > 2 and x[2] and x[2] != '-') else x[1],
+    key="select_barang_masuk"
+)
             with subcol2:
                 gudang_pilihan = st.selectbox("Simpan di Gudang Berapa", gudang_list, format_func=lambda x: x[1], key="select_gudang_masuk")
             
