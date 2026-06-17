@@ -174,14 +174,14 @@ def buat_pdf_bytes(no_nota, nama_pelanggan, daftar_item):
     story.append(item_table)
     story.append(Spacer(1, 10))
     
-    # Ringkasan Finansial Bawah
+    # Ringkasan Finansial Bawah (SUDAH DIPERBAIKI)
     fin_label = ParagraphStyle('FinLabel', fontName='Helvetica-Bold', fontSize=10, alignment=2, textColor=colors.HexColor('#1E293B'))
     fin_val = ParagraphStyle('FinVal', fontName='Helvetica', fontSize=10, alignment=2, textColor=colors.HexColor('#1E293B'))
     fin_val_bold = ParagraphStyle('FinValBold', fontName='Helvetica-Bold', fontSize=10, alignment=2, textColor=colors.HexColor('#B91C1C'))
     
     fin_data = [
-        [Paragraph("", cell_text), Paragraph("Subtotal:", fin_label), Paragraph(f"Rp {total_grossFolder:=:,}", fin_val)],
-        [Paragraph("", cell_text), Paragraph("Diskon Grosis (2%):", fin_label), Paragraph(f"- Rp {diskon:,.0f}", fin_val)],
+        [Paragraph("", cell_text), Paragraph("Subtotal:", fin_label), Paragraph(f"Rp {total_gross:,.0f}", fin_val)],
+        [Paragraph("", cell_text), Paragraph("Diskon Grosir (2%):", fin_label), Paragraph(f"- Rp {diskon:,.0f}", fin_val)],
         [Paragraph("", cell_text), Paragraph("TOTAL AKHIR:", fin_label), Paragraph(f"Rp {total_akhir:,.0f}", fin_val_bold)],
         [Paragraph("", cell_text), Paragraph("Tunai (Cash):", fin_label), Paragraph(f"Rp {tunai:,.0f}", fin_val)],
         [Paragraph("", cell_text), Paragraph("Kembalian:", fin_label), Paragraph(f"Rp {kembalian:,.0f}", fin_val)]
