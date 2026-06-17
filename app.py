@@ -287,8 +287,32 @@ with col_main_left:
             st.markdown("---")
             st.markdown("### 🛒 Ringkasan Transaksi Nota")
             
+            total_belanja = 0
             for idx, item in enumerate(st.session_state.cart_keluar, start=1):
                 st.markdown(f"**{idx}. {item['nama']} {item['ukuran']}** | {item['qty']} {item['satuan']} dari {item['gudang_nama']} | @ Rp {item['harga']:,} = **Rp {item['item_subtotal']:,}**")
+                total_belanja += item['item_subtotal']
+            
+            # ==========================================
+            # 🧮 FITUR BARU: KALKULATOR KASIR MANUAL
+            # ==========================================
+            st.markdown("---")
+            col_disk, col_bayar = st.columns(2)
+            
+            with col_disk:
+                diskon_nota = st.number_input("Diskon Nota Tambahan (Rp):", min_value=0, value=0, step=1000, key="adm_diskon")
+                total_akhir = max(0, total_belanja - diskon_nota)
+                st.markdown(f"### Total Tagihan: **Rp {total_akhir:,}**")
+                
+            with col_bayar:
+                uang_tunai = st.number_input("Uang Tunai / Bayar (Rp):", min_value=0, value=0, step=5000, key="adm_bayar")
+                if uang_tunai > 0:
+                    kembalian = uang_tunai - total_akhir
+                    if kembalian >= 0:
+                        st.success(f"💰 **Kembalian Pas:** Rp {kembalian:,}")
+                    else:
+                        st.error(f"⚠️ **Uang Kurang:** Rp {abs(kembalian):,}")
+            st.markdown("---")
+            # ==========================================
             
             c_bt1, c_bt2 = st.columns(2)
             with c_bt1:
@@ -296,6 +320,7 @@ with col_main_left:
                     st.session_state.cart_keluar = []
                     st.rerun()
             with c_bt2:
+                # Diskon dikirim ke PDF jika fungsi buat_pdf_bytes Anda mendukung parameter tambahan
                 pdf_data = buat_pdf_bytes(nota_input, customer_input, st.session_state.cart_keluar)
                 st.download_button("📥 CETAK & UNDUH PDF INVOICE", data=pdf_data, file_name=f"Invoice_{nota_input}.pdf", mime="application/pdf", width="stretch")
                 
