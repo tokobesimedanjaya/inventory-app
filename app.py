@@ -42,7 +42,8 @@ def init_db():
         cursor.executemany("INSERT INTO gudang (id, nama) VALUES (?, ?)", 
                            [(1, 'Gudang 1'), 
                             (2, 'Gudang 2'), 
-                            (3, 'Gudang 3')])
+                            (3, 'Gudang 3'),
+                            (4, 'Toko'    )])
         
     conn.commit()
     conn.close()
@@ -361,45 +362,124 @@ with col1:
         # INTERFACE: BARANG MASUK (RESTOCK)
         # ------------------------------------------
         else:
-            st.markdown("#### 🏢 Data Pengiriman Supplier")
-            nama_sales_masuk = st.text_input("Nama Penyuplai / Sales Supplier", placeholder="Masukkan nama sales atau nama pabrik...", key="input_sales_masuk")
-            
-            subcol1, subcol2 = st.columns(2)
-            with subcol1:
-                barang_pilihan = st.selectbox(
-    "Pilih Barang", 
-    barang_list, 
-    # Logika pintar: gabungkan nama dan ukuran dengan spasi biasa jika kolom ukuran ada isinya
-    format_func=lambda x: f"{x[1]} {x[2]}" if (len(x) > 2 and x[2] and x[2] != '-') else x[1],
-    key="select_barang_masuk"
-)
-            with subcol2:
-                gudang_pilihan = st.selectbox("Simpan di Gudang Berapa", gudang_list, format_func=lambda x: x[1], key="select_gudang_masuk")
-            
-            # MEMBUAT 2 KOLOM: Kolom kiri untuk jumlah barang, kolom kanan untuk PILIHAN SATUAN
-            qty_col1, qty_col2 = st.columns(2)
-            with qty_col1:
-                qty = st.number_input("Banyaknya Barang Masuk", min_value=1, value=50, step=1, key="number_qty_masuk")
-            with qty_col2:
-                # FITUR BARU: Dropdown pilihan satuan untuk barang masuk
-                satuan_pilihan_masuk = st.selectbox("Satuan", ["Batang", "Kilogram", "Ons", "Pcs"], key="select_satuan_masuk")
-            
-            if st.button("➕ Masukkan Daftar Restock", key="btn_add_cart_masuk"):
-                if not nama_sales_masuk.strip():
-                    st.warning("⚠️ Mohon isi Nama Penyuplai terlebih dahulu!")
-                else:
-                    st.session_state.cart_masuk.append({
-                        'id_barang': barang_pilihan[0],
-                        'nama': barang_pilihan[1],
-                        'ukuran': barang_pilihan[2] if len(barang_pilihan) > 2 else "",
-                        'id_gudang': gudang_pilihan[0],
-                        'gudang_nama': gudang_pilihan[1],
-                        'qty': qty,
-                        'satuan': satuan_pilihan_masuk, # <-- Menyimpan satuan yang Anda pilih ke daftar tunggu
-                        'sales': nama_sales_masuk
-                    })
-                    st.toast("Item berhasil dicatat ke daftar tunggu restock!")
+            st.markdown("---")
+st.subheader("🔄 Manifes & Pergerakan Barang Gudang")
 
+# Pilihan Aktivitas Utama dengan Radio Button yang Elegan
+activity = st.radio(
+    "Pilih Jenis Aktivitas Logistik:",
+    ["Keluar (Penjualan/Sales)", "Masuk (Restock/Supplier)"],
+    horizontal=True,
+    key="radio_aktivitas_utama"
+)
+
+# Fungsi Pintar untuk Menampilkan Nama + Ukuran secara Bersih (Tanpa Tanda Kurung Ganda Sistem)
+def format_nama_barang_bersih(x):
+    return f"{x[1]} {x[2]}" if (len(x) > 2 and x[2] and x[2] != '-') else x[1]
+
+# ------------------------------------------------------------------
+# A. INTERFACE: BARANG KELUAR (PENJUALAN)
+# ------------------------------------------------------------------
+if activity == "Keluar (Penjualan/Sales)":
+    st.markdown("#### 📄 Data Nota & Input Item")
+    
+    # Grid Baris 1: Informasi Dasar Nota
+    nota_col1, nota_col2 = st.columns(2)
+    with nota_col1:
+        nota_input = st.text_input("Nomor Nota / Invoice", value=st.session_state.invoice_number, key="input_nota_keluar")
+    with nota_col2:
+        customer_input = st.text_input("Nama Pelanggan", value="Cash", key="input_customer_keluar")
+    
+    # Grid Baris 2: Pemilihan Produk dan Lokasi Fisik
+    prod_col1, prod_col2 = st.columns(2)
+    with prod_col1:
+        barang_pilihan = st.selectbox(
+            "Pilih Barang Keluar", 
+            barang_list, 
+            format_func=format_nama_barang_bersih,
+            key="select_barang_keluar"
+        )
+    with prod_col2:
+        gudang_pilihan = st.selectbox(
+            "Ambil dari Gudang Berapa", 
+            gudang_list, 
+            format_func=lambda x: x[1], 
+            key="select_gudang_keluar"
+        )
+    
+    # Grid Baris 3: Detail Kuantitas, Satuan Ukur, dan Finansial (Sangat Seimbang)
+    det_col1, det_col2, det_col3 = st.columns([2, 2, 3])
+    with det_col1:
+        qty = st.number_input("Banyaknya Barang", min_value=1, value=5, step=1, key="number_qty_keluar")
+    with det_col2:
+        satuan_pilihan = st.selectbox("Pilih Satuan", ["Batang", "Kilogram", "Ons", "Pcs"], key="select_satuan_keluar")
+    with det_col3:
+        harga = st.number_input("Harga per Satuan (Rp)", min_value=0, value=35000, step=500, key="number_harga_keluar")
+        
+    st.markdown(" ") # Jarak pemisah tak kasat mata
+    if st.button("➕ Tambahkan Ke Keranjang Nota", key="btn_add_cart_keluar", use_container_width=True):
+        st.session_state.cart_keluar.append({
+            'id_barang': barang_pilihan[0],
+            'nama': barang_pilihan[1],
+            'ukuran': barang_pilihan[2],
+            'id_gudang': gudang_pilihan[0],
+            'gudang_nama': gudang_pilihan[1],
+            'qty': qty,
+            'satuan': satuan_pilihan,
+            'harga': harga,
+            'item_subtotal': qty * harga
+        })
+        st.toast("Item berhasil ditambahkan ke keranjang!")
+
+# ------------------------------------------------------------------
+# B. INTERFACE: BARANG MASUK (RESTOCK)
+# ------------------------------------------------------------------
+else:
+    st.markdown("#### 🏢 Data Pengiriman Supplier")
+    
+    # Grid Baris 1: Informasi Asal Pengirim
+    nama_sales_masuk = st.text_input("Nama Penyuplai / Sales Supplier", placeholder="Masukkan nama sales atau nama pabrik...", key="input_sales_masuk")
+    
+    # Grid Baris 2: Pemilihan Produk dan Lokasi Penempatan
+    restock_col1, restock_col2 = st.columns(2)
+    with restock_col1:
+        barang_pilihan = st.selectbox(
+            "Pilih Barang yang Masuk", 
+            barang_list, 
+            format_func=format_nama_barang_bersih,
+            key="select_barang_masuk"
+        )
+    with restock_col2:
+        gudang_pilihan = st.selectbox(
+            "Simpan di Gudang Berapa", 
+            gudang_list, 
+            format_func=lambda x: x[1], 
+            key="select_gudang_masuk"
+        )
+    
+    # Grid Baris 3: Detail Kuantitas dan Satuan Ukur Pengiriman (Sejajar Sempurna)
+    in_col1, in_col2 = st.columns(2)
+    with in_col1:
+        qty = st.number_input("Banyaknya Barang Masuk", min_value=1, value=50, step=1, key="number_qty_masuk")
+    with in_col2:
+        satuan_pilihan_masuk = st.selectbox("Satuan Logistik", ["Batang", "Kilogram", "Ons", "Pcs"], key="select_satuan_masuk")
+        
+    st.markdown(" ") 
+    if st.button("➕ Masukkan Daftar Restock", key="btn_add_cart_masuk", use_container_width=True):
+        if not nama_sales_masuk.strip():
+            st.warning("⚠️ Mohon isi Nama Penyuplai terlebih dahulu!")
+        else:
+            st.session_state.cart_masuk.append({
+                'id_barang': barang_pilihan[0],
+                'nama': barang_pilihan[1],
+                'ukuran': barang_pilihan[2] if len(barang_pilihan) > 2 else "",
+                'id_gudang': gudang_pilihan[0],
+                'gudang_nama': gudang_pilihan[1],
+                'qty': qty,
+                'satuan': satuan_pilihan_masuk,
+                'sales': nama_sales_masuk
+            })
+            st.toast("Item berhasil dicatat ke daftar tunggu restock!")
             if st.session_state.cart_masuk:
                 st.markdown("---")
                 st.markdown("### 📥 Daftar Tunggu Restock Masuk")
