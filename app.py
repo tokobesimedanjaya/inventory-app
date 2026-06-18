@@ -253,6 +253,7 @@ st.markdown("Aplikasi Manajemen Gudang Modern Terintegrasi - Fleksibilitas Multi
 col_main_left, col_main_right = st.columns([7, 5])
 
 with col_main_left:
+    
     # ==========================================
     # 2. ANTARMUKA AKTIVITAS BARANG (KELUAR / MASUK)
     # ==========================================
@@ -312,6 +313,9 @@ with col_main_left:
             st.toast("Item berhasil ditambahkan ke keranjang!")
 
         # Tampilan Ringkasan Manifest Invoice Keluar
+# ====================================================================
+# 🛒 TAMPILAN RINGKASAN MANIFEST INVOICE KELUAR
+# ====================================================================
         if st.session_state.cart_keluar:
             st.markdown("---")
             st.markdown("### 🛒 Ringkasan Transaksi Nota")
@@ -321,9 +325,6 @@ with col_main_left:
                 st.markdown(f"**{idx}. {item['nama']} {item['ukuran']}** | {item['qty']} {item['satuan']} dari {item['gudang_nama']} | @ Rp {item['harga']:,} = **Rp {item['item_subtotal']:,}**")
                 total_belanja += item['item_subtotal']
             
-            # ==========================================
-            # 🧮 FITUR BARU: KALKULATOR KASIR MANUAL
-            # ==========================================
             st.markdown("---")
             col_disk, col_bayar = st.columns(2)
             
@@ -333,7 +334,16 @@ with col_main_left:
                 st.markdown(f"### Total Tagihan: **Rp {total_akhir:,}**")
                 
             with col_bayar:
-                uang_tunai = st.number_input("Uang Tunai / Bayar (Rp):", min_value=0, value=0, step=5000, key="adm_bayar")
+                # Trik Rerun Otomatis: Setiap kali kasir selesai mengetik uang bayar dan menekan Enter, 
+                # halaman akan merefresh komponen internal secara instan sehingga nilai PDF ikut ter-update!
+                uang_tunai = st.number_input(
+                    "Uang Tunai / Bayar (Rp):", 
+                    min_value=0, 
+                    value=0, 
+                    step=5000, 
+                    key="adm_bayar",
+                    on_change=lambda: st.rerun if 'adm_bayar' in st.session_state else None
+                )
                 if uang_tunai > 0:
                     kembalian = uang_tunai - total_akhir
                     if kembalian >= 0:
@@ -341,24 +351,34 @@ with col_main_left:
                     else:
                         st.error(f"⚠️ **Uang Kurang:** Rp {abs(kembalian):,}")
             st.markdown("---")
-            # ==========================================
             
             c_bt1, c_bt2 = st.columns(2)
             with c_bt1:
                 if st.button("🗑️ Kosongkan Keranjang", key="clear_cart_keluar", width="stretch"):
                     st.session_state.cart_keluar = []
                     st.rerun()
+                    
             with c_bt2:
-                # Kita kirimkan nilai diskon_nota dan uang_tunai langsung ke fungsi pembentuk PDF
+                # Membaca data state kasir yang paling segar saat tombol download dirender
+                diskon_live = st.session_state.get("adm_diskon", 0)
+                tunai_live = st.session_state.get("adm_bayar", 0)
+                
                 pdf_data = buat_pdf_bytes(
                     nota_input, 
                     customer_input, 
                     st.session_state.cart_keluar,
-                    diskon_input=diskon_nota,
-                    bayar_input=uang_tunai
+                    diskon_input=diskon_live,
+                    bayar_input=tunai_live
                 )
-                st.download_button("📥 CETAK & UNDUH PDF INVOICE", data=pdf_data, file_name=f"Invoice_{nota_input}.pdf", mime="application/pdf", width="stretch")
-                
+                st.download_button(
+                    "📥 CETAK & UNDUH PDF INVOICE", 
+                    data=pdf_data, 
+                    file_name=f"Invoice_{nota_input}.pdf", 
+                    mime="application/pdf", 
+                    width="stretch"
+                )
+            
+            st.markdown(" ")
             if st.button("💾 SIMPAN TRANSAKSI POTONG STOK", key="save_stok_keluar", width="stretch"):
                 for item in st.session_state.cart_keluar:
                     update_stok_db(item['id_barang'], item['id_gudang'], item['qty'], "Keluar")
@@ -368,7 +388,7 @@ with col_main_left:
                 st.rerun()
 
     # ------------------------------------------------------------------
-    # B. INTERFACE: BARANG MASUK (RESTOCK)
+    # B. INTERFACE: BARANG MASUK (RESTOCK) - SEJAJAR DENGAN LINE 168
     # ------------------------------------------------------------------
     else:
         st.markdown("#### 🏢 Data Pengiriman Supplier")
@@ -376,79 +396,30 @@ with col_main_left:
         
         restock_col1, restock_col2 = st.columns(2)
         with restock_col1:
-            barang_pilihan = st.selectbox("Pilih Barang yang Masuk", barang_list, format_func=format_nama_barang_bersih, key="select_barang_masuk")
+            barang_pilihan_masuk = st.selectbox("Pilih Barang yang Masuk", barang_list, format_func=format_nama_barang_bersih, key="select_barang_masuk")
         with restock_col2:
-            gudang_pilihan = st.selectbox("Simpan di Gudang Berapa", gudang_list, format_func=lambda x: x[1], key="select_gudang_masuk")
+            gudang_pilihan_masuk = st.selectbox("Simpan di Gudang Berapa", gudang_list, format_func=lambda x: x[1], key="select_gudang_masuk")
         
         in_col1, in_col2 = st.columns(2)
         with in_col1:
-            qty = st.number_input("Banyaknya Barang Masuk", min_value=1, value=50, step=1, key="number_qty_masuk")
+            qty_masuk = st.number_input("Banyaknya Barang Masuk", min_value=1, value=50, step=1, key="number_qty_masuk")
         with in_col2:
             satuan_pilihan_masuk = st.selectbox("Satuan Logistik", ["Batang", "Kilogram", "Ons", "Pcs"], key="select_satuan_masuk")
             
         st.markdown(" ")
-        if st.session_state.cart_keluar:
-            st.markdown("---")
-            st.markdown("### 🛒 Ringkasan Transaksi Nota")
-            
-            total_belanja = 0
-            for idx, item in enumerate(st.session_state.cart_keluar, start=1):
-                st.markdown(f"**{idx}. {item['nama']} {item['ukuran']}** | {item['qty']} {item['satuan']} dari {item['gudang_nama']} | @ Rp {item['harga']:,} = **Rp {item['item_subtotal']:,}**")
-                total_belanja += item['item_subtotal']
-            
-            st.markdown("---")
-            col_disk, col_bayar = st.columns(2)
-            
-            with col_disk:
-                diskon_nota = st.number_input("Diskon Nota Tambahan (Rp):", min_value=0, value=0, step=1000, key="adm_diskon")
-                total_akhir = max(0, total_belanja - diskon_nota)
-                st.markdown(f"### Total Tagihan: **Rp {total_akhir:,}**")
-                
-            with col_bayar:
-                uang_tunai = st.number_input("Uang Tunai / Bayar (Rp):", min_value=0, value=0, step=5000, key="adm_bayar")
-                if uang_tunai > 0:
-                    kembalian = uang_tunai - total_akhir
-                    if kembalian >= 0:
-                        st.success(f"💰 **Kembalian Pas:** Rp {kembalian:,}")
-                    else:
-                        st.error(f"⚠️ **Uang Kurang:** Rp {abs(kembalian):,}")
-            st.markdown("---")
-            
-            c_bt1, c_bt2 = st.columns(2)
-            with c_bt1:
-                if st.button("🗑️ Kosongkan Keranjang", key="clear_cart_keluar", width="stretch"):
-                    st.session_state.cart_keluar = []
-                    st.rerun()
-                    
-            with c_bt2:
-                # Tombol pemicu untuk mengunci angka kalkulator kasir secara paksa
-                if st.button("🖨️ Kunci & Siapkan Data Nota", width="stretch"):
-                    st.session_state.nota_siap = True
-                
-                # Jika data sudah dikunci, tombol download PDF baru akan muncul dengan data yang sudah segar!
-                if st.session_state.get("nota_siap", False):
-                    pdf_data = buat_pdf_bytes(
-                        nota_input, 
-                        customer_input, 
-                        st.session_state.cart_keluar,
-                        diskon_input=diskon_nota,
-                        bayar_input=uang_tunai
-                    )
-                    st.download_button(
-                        "📥 CETAK & UNDUH PDF INVOICE", 
-                        data=pdf_data, 
-                        file_name=f"Invoice_{nota_input}.pdf", 
-                        mime="application/pdf", 
-                        width="stretch"
-                    )
-                    
-            if st.button("💾 SIMPAN TRANSAKSI POTONG STOK", key="save_stok_keluar", width="stretch"):
-                for item in st.session_state.cart_keluar:
-                    update_stok_db(item['id_barang'], item['id_gudang'], item['qty'], "Keluar")
-                st.success("✅ Stok berhasil dipotong! Transaksi penjualan telah dibukukan.")
-                st.session_state.cart_keluar = []
-                st.session_state.nota_siap = False # Reset status cetakan
-                st.session_state.invoice_number = f"INV-MJ-{datetime.now().strftime('%d%m%Y-%H%M')}"
+        # TOMBOL SIMPAN SINKRON SEJAJAR KHUSUS UNTUK BARANG MASUK / RESTOCK
+        if st.button("📥 SIMPAN TRANSAKSI MASUK STOK", key="btn_simpan_stok_masuk", width="stretch"):
+            if nama_sales_masuk.strip() == "":
+                st.error("❌ Gagal! Mohon masukkan nama Sales atau Penyuplai terlebih dahulu.")
+            else:
+                update_stok_db(
+                    id_barang=barang_pilihan_masuk[0], 
+                    id_gudang=gudang_pilihan_masuk[0], 
+                    qty=qty_masuk, 
+                    jenis_gerakan="Masuk", 
+                    nama_sales=nama_sales_masuk
+                )
+                st.success(f"✅ Berhasil! Stok {barang_pilihan_masuk[1]} berhasil ditambah sebanyak {qty_masuk} {satuan_pilihan_masuk} dari supplier.")
                 st.rerun()
 
 
