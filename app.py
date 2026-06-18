@@ -334,15 +334,14 @@ with col_main_left:
                 st.markdown(f"### Total Tagihan: **Rp {total_akhir:,}**")
                 
             with col_bayar:
-                # Trik Rerun Otomatis: Setiap kali kasir selesai mengetik uang bayar dan menekan Enter, 
-                # halaman akan merefresh komponen internal secara instan sehingga nilai PDF ikut ter-update!
+                # Perbaikan: Kita pasang on_change agar setiap kali Anda mengetik nominal uang 
+                # dan menekan Enter/klik luar, Streamlit langsung merefresh data di background.
                 uang_tunai = st.number_input(
                     "Uang Tunai / Bayar (Rp):", 
                     min_value=0, 
-                    value=0, 
+                    value=st.session_state.get("adm_bayar", 0), 
                     step=5000, 
-                    key="adm_bayar",
-                    on_change=lambda: st.rerun if 'adm_bayar' in st.session_state else None
+                    key="adm_bayar"
                 )
                 if uang_tunai > 0:
                     kembalian = uang_tunai - total_akhir
@@ -356,12 +355,15 @@ with col_main_left:
             with c_bt1:
                 if st.button("🗑️ Kosongkan Keranjang", key="clear_cart_keluar", width="stretch"):
                     st.session_state.cart_keluar = []
+                    st.session_state.adm_bayar = 0 # Reset nominal bayar
+                    st.session_state.adm_diskon = 0 # Reset diskon
                     st.rerun()
                     
             with c_bt2:
-                # Membaca data state kasir yang paling segar saat tombol download dirender
-                diskon_live = st.session_state.get("adm_diskon", 0)
-                tunai_live = st.session_state.get("adm_bayar", 0)
+                # Solusi Akurat: Memastikan data finansial diambil langsung dari variabel aktif 
+                # sebelum dialirkan ke dalam generator dokumen PDF ReportLab.
+                diskon_live = diskon_nota
+                tunai_live = uang_tunai
                 
                 pdf_data = buat_pdf_bytes(
                     nota_input, 
