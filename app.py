@@ -98,7 +98,7 @@ def update_stok_db(id_barang, id_gudang, qty, jenis_gerakan, nama_sales="-"):
     conn.close()
 
 # Fungsi Generator Dokumen PDF Kuitansi
-def buat_pdf_bytes(no_nota, nama_pelanggan, daftar_item):
+def buat_pdf_bytes(no_nota, nama_pelanggan, daftar_item, diskon_input=0, bayar_input=0):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     story = []
@@ -145,18 +145,47 @@ def buat_pdf_bytes(no_nota, nama_pelanggan, daftar_item):
         data.append([
             Paragraph(str(idx), cell_center),
             Paragraph(item['nama'], cell_text),
-            Paragraph(item['ukuran'], cell_text),
+            Paragraph(item['ukuran'] if item['ukuran'] else "-", cell_text),
             Paragraph(item['gudang_nama'], cell_center),
             Paragraph(str(item['qty']), cell_center),
             Paragraph(item['satuan'], cell_center),
             Paragraph(f"Rp {item['harga']:,}", cell_right),
             Paragraph(f"Rp {item['item_subtotal']:,}", cell_right)
         ])
-        
-    diskon = total_gross * 0.02
-    total_akhir = total_gross - diskon
-    tunai = (int(total_akhir // 10000) + 1) * 10000
-    kembalian = tunai - total_akhir
+    
+    # 🧮 HITUNGAN MATEMATIKA NOTA BERDASARKAN INPUT KASIR HANS
+    total_akhir_pdf = max(0, total_gross - diskon_input)
+    kembalian_pdf = max(0, bayar_input - total_akhir_pdf) if bayar_input > 0 else 0
+
+    # Baris Kosong Pembatas di Tabel untuk Total
+    data.append(["", "", "", "", "", "", "", ""])
+    
+    # Masukkan ringkasan hitungan kasir ke bagian bawah tabel PDF
+    data.append(["", "", "", "", "", "", Paragraph("<b>Subtotal:</b>", cell_right), Paragraph(f"Rp {total_gross:,}", cell_right)])
+    data.append(["", "", "", "", "", "", Paragraph("<b>Diskon Nota:</b>", cell_right), Paragraph(f"- Rp {diskon_input:,}", cell_right)])
+    data.append(["", "", "", "", "", "", Paragraph("<b>TOTAL AKHIR:</b>", cell_right), Paragraph(f"<b>Rp {total_akhir_pdf:,}</b>", cell_right)])
+    data.append(["", "", "", "", "", "", Paragraph("<b>Tunai (Cash):</b>", cell_right), Paragraph(f"Rp {bayar_input:,}", cell_right)])
+    data.append(["", "", "", "", "", "", Paragraph("<b>Kembalian:</b>", cell_right), Paragraph(f"Rp {kembalian_pdf:,}", cell_right)])
+    
+    # Atur Lebar Kolom Tabel PDF agar Pas Berjejer Rapi
+    col_widths = [25, 110, 95, 45, 35, 45, 65, 80]
+    t = Table(data, colWidths=col_widths, repeatRows=1)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A8A')), # Warna Header Biru Gelap khas Toko Besi MJ
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor('#CBD5E1')), # Garis tabel tipis abu-abu
+        ('LINEBELOW', (0, -1), (-1, -1), 1, colors.HexColor('#1E3A8A')),
+    ]))
+    
+    story.append(t)
+    
+    # Build document PDF
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
     
     table_style = TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1E3A8A')),
@@ -320,8 +349,14 @@ with col_main_left:
                     st.session_state.cart_keluar = []
                     st.rerun()
             with c_bt2:
-                # Diskon dikirim ke PDF jika fungsi buat_pdf_bytes Anda mendukung parameter tambahan
-                pdf_data = buat_pdf_bytes(nota_input, customer_input, st.session_state.cart_keluar)
+                # Kita kirimkan nilai diskon_nota dan uang_tunai langsung ke fungsi pembentuk PDF
+                pdf_data = buat_pdf_bytes(
+                    nota_input, 
+                    customer_input, 
+                    st.session_state.cart_keluar,
+                    diskon_input=diskon_nota,
+                    bayar_input=uang_tunai
+                )
                 st.download_button("📥 CETAK & UNDUH PDF INVOICE", data=pdf_data, file_name=f"Invoice_{nota_input}.pdf", mime="application/pdf", width="stretch")
                 
             if st.button("💾 SIMPAN TRANSAKSI POTONG STOK", key="save_stok_keluar", width="stretch"):
