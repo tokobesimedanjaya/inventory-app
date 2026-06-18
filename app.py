@@ -405,7 +405,6 @@ with col_main_left:
                 st.markdown(f"### Total Tagihan: **Rp {total_akhir:,}**")
                 
             with col_bayar:
-                # Kita gunakan parameter on_change atau langsung gunakan session_state agar nilainya mengunci instan
                 uang_tunai = st.number_input("Uang Tunai / Bayar (Rp):", min_value=0, value=0, step=5000, key="adm_bayar")
                 if uang_tunai > 0:
                     kembalian = uang_tunai - total_akhir
@@ -420,25 +419,35 @@ with col_main_left:
                 if st.button("🗑️ Kosongkan Keranjang", key="clear_cart_keluar", width="stretch"):
                     st.session_state.cart_keluar = []
                     st.rerun()
+                    
             with c_bt2:
-                # Mengambil nilai tunai langsung dari session state kasir secara real-time sebelum PDF di-generate
-                diskon_saat_ini = st.session_state.get("adm_diskon", 0)
-                tunai_saat_ini = st.session_state.get("adm_bayar", 0)
+                # Tombol pemicu untuk mengunci angka kalkulator kasir secara paksa
+                if st.button("🖨️ Kunci & Siapkan Data Nota", width="stretch"):
+                    st.session_state.nota_siap = True
                 
-                pdf_data = buat_pdf_bytes(
-                    nota_input, 
-                    customer_input, 
-                    st.session_state.cart_keluar,
-                    diskon_input=diskon_saat_ini,
-                    bayar_input=tunai_saat_ini
-                )
-                st.download_button("📥 CETAK & UNDUH PDF INVOICE", data=pdf_data, file_name=f"Invoice_{nota_input}.pdf", mime="application/pdf", width="stretch")
-                
+                # Jika data sudah dikunci, tombol download PDF baru akan muncul dengan data yang sudah segar!
+                if st.session_state.get("nota_siap", False):
+                    pdf_data = buat_pdf_bytes(
+                        nota_input, 
+                        customer_input, 
+                        st.session_state.cart_keluar,
+                        diskon_input=diskon_nota,
+                        bayar_input=uang_tunai
+                    )
+                    st.download_button(
+                        "📥 CETAK & UNDUH PDF INVOICE", 
+                        data=pdf_data, 
+                        file_name=f"Invoice_{nota_input}.pdf", 
+                        mime="application/pdf", 
+                        width="stretch"
+                    )
+                    
             if st.button("💾 SIMPAN TRANSAKSI POTONG STOK", key="save_stok_keluar", width="stretch"):
                 for item in st.session_state.cart_keluar:
                     update_stok_db(item['id_barang'], item['id_gudang'], item['qty'], "Keluar")
                 st.success("✅ Stok berhasil dipotong! Transaksi penjualan telah dibukukan.")
                 st.session_state.cart_keluar = []
+                st.session_state.nota_siap = False # Reset status cetakan
                 st.session_state.invoice_number = f"INV-MJ-{datetime.now().strftime('%d%m%Y-%H%M')}"
                 st.rerun()
 
