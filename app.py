@@ -387,39 +387,59 @@ with col_main_left:
             satuan_pilihan_masuk = st.selectbox("Satuan Logistik", ["Batang", "Kilogram", "Ons", "Pcs"], key="select_satuan_masuk")
             
         st.markdown(" ")
-        if st.button("➕ Masukkan Daftar Restock", key="btn_add_cart_masuk", width="stretch"):
-            if not nama_sales_masuk.strip():
-                st.warning("⚠️ Mohon isi Nama Penyuplai terlebih dahulu!")
-            else:
-                st.session_state.cart_masuk.append({
-                    'id_barang': barang_pilihan[0],
-                    'nama': barang_pilihan[1],
-                    'ukuran': barang_pilihan[2] if (len(barang_pilihan) > 2 and barang_pilihan[2] != '-') else "",
-                    'id_gudang': gudang_pilihan[0],
-                    'gudang_nama': gudang_pilihan[1],
-                    'qty': qty,
-                    'satuan': satuan_pilihan_masuk,
-                    'sales': nama_sales_masuk
-                })
-                st.toast("Item berhasil dicatat ke daftar tunggu restock!")
-
-        if st.session_state.cart_masuk:
+        if st.session_state.cart_keluar:
             st.markdown("---")
-            st.markdown("### 📥 Daftar Tunggu Restock Masuk")
+            st.markdown("### 🛒 Ringkasan Transaksi Nota")
             
-            for idx, item in enumerate(st.session_state.cart_masuk, start=1):
-                st.markdown(f"**{idx}. {item['nama']} {item['ukuran']}** -> +{item['qty']} {item['satuan']} ke {item['gudang_nama']} (Sales: {item['sales']})")
+            total_belanja = 0
+            for idx, item in enumerate(st.session_state.cart_keluar, start=1):
+                st.markdown(f"**{idx}. {item['nama']} {item['ukuran']}** | {item['qty']} {item['satuan']} dari {item['gudang_nama']} | @ Rp {item['harga']:,} = **Rp {item['item_subtotal']:,}**")
+                total_belanja += item['item_subtotal']
             
-            st.markdown(" ")
-            if st.button("🗑️ Bersihkan Daftar Tunggu", key="clear_cart_mas", width="stretch"):
-                st.session_state.cart_masuk = []
-                st.rerun()
+            st.markdown("---")
+            col_disk, col_bayar = st.columns(2)
             
-            if st.button("💾 SIMPAN SEMUA BARANG MASUK KE DATABASE", key="btn_simpan_masuk", width="stretch"):
-                for item in st.session_state.cart_masuk:
-                    update_stok_db(item['id_barang'], item['id_gudang'], item['qty'], "Masuk", nama_sales=item['sales'])
-                st.success("✅ Sukses! Semua item restock massal berhasil ditambahkan ke database.")
-                st.session_state.cart_masuk = []
+            with col_disk:
+                diskon_nota = st.number_input("Diskon Nota Tambahan (Rp):", min_value=0, value=0, step=1000, key="adm_diskon")
+                total_akhir = max(0, total_belanja - diskon_nota)
+                st.markdown(f"### Total Tagihan: **Rp {total_akhir:,}**")
+                
+            with col_bayar:
+                # Kita gunakan parameter on_change atau langsung gunakan session_state agar nilainya mengunci instan
+                uang_tunai = st.number_input("Uang Tunai / Bayar (Rp):", min_value=0, value=0, step=5000, key="adm_bayar")
+                if uang_tunai > 0:
+                    kembalian = uang_tunai - total_akhir
+                    if kembalian >= 0:
+                        st.success(f"💰 **Kembalian Pas:** Rp {kembalian:,}")
+                    else:
+                        st.error(f"⚠️ **Uang Kurang:** Rp {abs(kembalian):,}")
+            st.markdown("---")
+            
+            c_bt1, c_bt2 = st.columns(2)
+            with c_bt1:
+                if st.button("🗑️ Kosongkan Keranjang", key="clear_cart_keluar", width="stretch"):
+                    st.session_state.cart_keluar = []
+                    st.rerun()
+            with c_bt2:
+                # Mengambil nilai tunai langsung dari session state kasir secara real-time sebelum PDF di-generate
+                diskon_saat_ini = st.session_state.get("adm_diskon", 0)
+                tunai_saat_ini = st.session_state.get("adm_bayar", 0)
+                
+                pdf_data = buat_pdf_bytes(
+                    nota_input, 
+                    customer_input, 
+                    st.session_state.cart_keluar,
+                    diskon_input=diskon_saat_ini,
+                    bayar_input=tunai_saat_ini
+                )
+                st.download_button("📥 CETAK & UNDUH PDF INVOICE", data=pdf_data, file_name=f"Invoice_{nota_input}.pdf", mime="application/pdf", width="stretch")
+                
+            if st.button("💾 SIMPAN TRANSAKSI POTONG STOK", key="save_stok_keluar", width="stretch"):
+                for item in st.session_state.cart_keluar:
+                    update_stok_db(item['id_barang'], item['id_gudang'], item['qty'], "Keluar")
+                st.success("✅ Stok berhasil dipotong! Transaksi penjualan telah dibukukan.")
+                st.session_state.cart_keluar = []
+                st.session_state.invoice_number = f"INV-MJ-{datetime.now().strftime('%d%m%Y-%H%M')}"
                 st.rerun()
 
 
