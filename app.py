@@ -113,6 +113,9 @@ def buat_pdf_bytes(no_nota, nama_pelanggan, daftar_item, diskon_input=0, bayar_i
     cell_header = ParagraphStyle('CellHeader', fontName='Helvetica-Bold', fontSize=10, leading=12, alignment=1, textColor=colors.white)
     cell_right = ParagraphStyle('CellRight', fontName='Helvetica', fontSize=9, leading=12, alignment=2, textColor=colors.HexColor('#1E293B'))
     cell_center = ParagraphStyle('CellCenter', fontName='Helvetica', fontSize=9, leading=12, alignment=1, textColor=colors.HexColor('#1E293B'))
+    
+    # Kunci Perbaikan: Variabel style ditaruh di atas agar terbaca dengan aman
+    footer_style = ParagraphStyle('FooterStyle', fontName='Helvetica-Oblique', fontSize=9, leading=13, alignment=1, textColor=colors.HexColor('#64748B'))
 
     # Header Kuitansi Toko
     story.append(Paragraph("TOKO BESI MEDAN JAYA", title_style))
@@ -153,42 +156,40 @@ def buat_pdf_bytes(no_nota, nama_pelanggan, daftar_item, diskon_input=0, bayar_i
             Paragraph(f"Rp {item['item_subtotal']:,}", cell_right)
         ])
     
-    # 🧮 HITUNGAN MATEMATIKA NOTA BERDASARKAN INPUT KASIR HANS
+    # 🧮 Hitungan Finansial
     total_akhir_pdf = max(0, total_gross - diskon_input)
     kembalian_pdf = max(0, bayar_input - total_akhir_pdf) if bayar_input > 0 else 0
 
-    # Baris Kosong Pembatas di Tabel untuk Total
+    # Baris Kosong Pembatas
     data.append(["", "", "", "", "", "", "", ""])
     
-    # Masukkan ringkasan hitungan kasir ke bagian bawah tabel PDF
+    # Ringkasan Biaya di Bawah Tabel
     data.append(["", "", "", "", "", "", Paragraph("<b>Subtotal:</b>", cell_right), Paragraph(f"Rp {total_gross:,}", cell_right)])
     data.append(["", "", "", "", "", "", Paragraph("<b>Diskon Nota:</b>", cell_right), Paragraph(f"- Rp {diskon_input:,}", cell_right)])
     data.append(["", "", "", "", "", "", Paragraph("<b>TOTAL AKHIR:</b>", cell_right), Paragraph(f"<b>Rp {total_akhir_pdf:,}</b>", cell_right)])
     data.append(["", "", "", "", "", "", Paragraph("<b>Tunai (Cash):</b>", cell_right), Paragraph(f"Rp {bayar_input:,}", cell_right)])
     data.append(["", "", "", "", "", "", Paragraph("<b>Kembalian:</b>", cell_right), Paragraph(f"Rp {kembalian_pdf:,}", cell_right)])
     
-    # Atur Lebar Kolom Tabel PDF agar Pas Berjejer Rapi
     col_widths = [25, 110, 95, 45, 35, 45, 65, 80]
     t = Table(data, colWidths=col_widths, repeatRows=1)
     t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A8A')), # Warna Header Biru Gelap
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A8A')),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
         ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor('#CBD5E1')), # Garis tabel tipis abu-abu
+        ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor('#CBD5E1')),
         ('LINEBELOW', (0, -1), (-1, -1), 1, colors.HexColor('#1E3A8A')),
     ]))
     story.append(t)
     
-    # 📝 SEKSI FOOTER: CATATAN KETENTUAN PENGEMBALIAN BARANG TOKO MJ
+    # 📝 Seksi Cetak Catatan Toko di Bawah Garis
     story.append(Spacer(1, 25))
     story.append(Paragraph("--------------------------------------------------------------------------------------------------------------------------------------", subtitle_style))
     story.append(Spacer(1, 5))
     story.append(Paragraph("<b>Terima kasih telah berbelanja di Toko Besi Medan Jaya.</b>", footer_style))
     story.append(Paragraph("Barang yang sudah dibeli tidak dapat ditukar atau dikembalikan dalam kondisi apapun.", footer_style))
     
-    # Kunci Utama: Cukup panggil SATU KALI eksekusi build di akhir fungsi setelah footer dimasukkan
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
