@@ -113,9 +113,6 @@ def buat_pdf_bytes(no_nota, nama_pelanggan, daftar_item, diskon_input=0, bayar_i
     cell_header = ParagraphStyle('CellHeader', fontName='Helvetica-Bold', fontSize=10, leading=12, alignment=1, textColor=colors.white)
     cell_right = ParagraphStyle('CellRight', fontName='Helvetica', fontSize=9, leading=12, alignment=2, textColor=colors.HexColor('#1E293B'))
     cell_center = ParagraphStyle('CellCenter', fontName='Helvetica', fontSize=9, leading=12, alignment=1, textColor=colors.HexColor('#1E293B'))
-    
-    # Style Baru Khusus Footer Catatan Ketat Toko Besi MJ
-    footer_style = ParagraphStyle('FooterStyle', fontName='Helvetica-Oblique', fontSize=9, leading=13, alignment=1, textColor=colors.HexColor('#64748B'))
 
     # Header Kuitansi Toko
     story.append(Paragraph("TOKO BESI MEDAN JAYA", title_style))
@@ -156,7 +153,7 @@ def buat_pdf_bytes(no_nota, nama_pelanggan, daftar_item, diskon_input=0, bayar_i
             Paragraph(f"Rp {item['item_subtotal']:,}", cell_right)
         ])
     
-    # 🧮 HITUNGAN MATEMATIKA NOTA BERDASARKAN INPUT KASIR
+    # 🧮 HITUNGAN MATEMATIKA NOTA BERDASARKAN INPUT KASIR HANS
     total_akhir_pdf = max(0, total_gross - diskon_input)
     kembalian_pdf = max(0, bayar_input - total_akhir_pdf) if bayar_input > 0 else 0
 
@@ -174,7 +171,7 @@ def buat_pdf_bytes(no_nota, nama_pelanggan, daftar_item, diskon_input=0, bayar_i
     col_widths = [25, 110, 95, 45, 35, 45, 65, 80]
     t = Table(data, colWidths=col_widths, repeatRows=1)
     t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A8A')), # Warna Header Biru Gelap
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A8A')), # Warna Header Biru Gelap khas Toko Besi MJ
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
@@ -182,14 +179,8 @@ def buat_pdf_bytes(no_nota, nama_pelanggan, daftar_item, diskon_input=0, bayar_i
         ('GRID', (0, 0), (-1, -2), 0.5, colors.HexColor('#CBD5E1')), # Garis tabel tipis abu-abu
         ('LINEBELOW', (0, -1), (-1, -1), 1, colors.HexColor('#1E3A8A')),
     ]))
-    story.append(t)
     
-    # 📝 SEKSI FOOTER: CATATAN KETENTUAN PENGEMBALIAN BARANG TOKO MJ
-    story.append(Spacer(1, 25))
-    story.append(Paragraph("--------------------------------------------------------------------------------------------------------------------------------------", subtitle_style))
-    story.append(Spacer(1, 5))
-    story.append(Paragraph("<b>Terima kasih telah berbelanja di Toko Besi Medan Jaya.</b>", footer_style))
-    story.append(Paragraph("Barang yang sudah dibeli tidak dapat ditukar atau dikembalikan dalam kondisi apapun.", footer_style))
+    story.append(t)
     
     # Build document PDF
     doc.build(story)
@@ -415,7 +406,7 @@ with col_main_left:
         with in_col1:
             qty_masuk = st.number_input("Banyaknya Barang Masuk", min_value=1, value=50, step=1, key="number_qty_masuk")
         with in_col2:
-            satuan_pilihan_masuk = st.selectbox("Satuan Logistik", ["Batang", "Kilogram", "Ons", "Pcs"], key="select_satuan_masuk")
+            satuan_pilihan_masuk = st.selectbox("Satuan Logistik", ["Batang", "Kilogram", "Pcs"], key="select_satuan_masuk")
             
         st.markdown(" ")
         # TOMBOL SIMPAN SINKRON SEJAJAR KHUSUS UNTUK BARANG MASUK / RESTOCK
@@ -492,7 +483,7 @@ with expand_barang:
             )
             satuan_baru = st.selectbox(
                 "Pilih Satuan Default", 
-                ["Batang", "Kilogram", "Ons", "Pcs"], 
+                ["Batang", "Kilogram", "Pcs"], 
                 key="select_satuan_barang_baru"
             )
             submit_b = st.form_submit_button("Daftarkan Barang Baru", width="stretch")
