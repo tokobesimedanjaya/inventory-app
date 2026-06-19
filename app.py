@@ -154,7 +154,7 @@ def buat_pdf_bytes(no_nota, nama_pelanggan, daftar_item, diskon_input=0, bayar_i
         ])
     
     # 🧮 HITUNGAN MATEMATIKA NOTA BERDASARKAN INPUT KASIR HANS
-total_akhir_pdf = max(0, total_gross - diskon_input)
+    total_akhir_pdf = max(0, total_gross - diskon_input)
     kembalian_pdf = max(0, bayar_input - total_akhir_pdf) if bayar_input > 0 else 0
 
     # Baris Kosong Pembatas di Tabel untuk Total
